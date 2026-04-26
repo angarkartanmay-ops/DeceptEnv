@@ -61,12 +61,20 @@ def _embed_image_as_data_uri(path: Path) -> str:
         return ""
 
 
+_PLOT_NAMES = (
+    "baseline_vs_trained.png",
+    "suspicion_curve.png",
+    "reward_curve.png",
+    "reward_ascent.png",
+    "suspicion_decay.png",
+    "contradiction_frequency.png",
+)
+
+
 def _render_landing_html() -> str:
     readme = _find_repo_file("README.md")
     plots = {
-        "baseline_vs_trained.png": _find_repo_file("docs/assets/baseline_vs_trained.png"),
-        "suspicion_curve.png":     _find_repo_file("docs/assets/suspicion_curve.png"),
-        "reward_curve.png":        _find_repo_file("docs/assets/reward_curve.png"),
+        name: _find_repo_file(f"docs/assets/{name}") for name in _PLOT_NAMES
     }
     plot_uris = {
         name: (_embed_image_as_data_uri(p) if p else "")
