@@ -203,54 +203,88 @@
   .left::-webkit-scrollbar-track,.chat-window::-webkit-scrollbar-track{background:transparent;}
 
   /* ----------------------------------------------------------------
-     RIGHT PANE — the chat
+     RIGHT PANE — re-tuned for compactness + breathing room
   ---------------------------------------------------------------- */
-  .R-head{padding:14px 20px 12px;border-bottom:1px solid var(--line);
-    background:linear-gradient(180deg,rgba(255,255,255,.02),transparent);}
-  .R-head .lab{
-    display:flex;justify-content:space-between;align-items:baseline;
-    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;
-    text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;
-  }
-  .R-head .susp-val{color:var(--text);font-size:18px;font-weight:700;
-    letter-spacing:-.01em;text-transform:none;font-family:'Inter',sans-serif;}
-  .R-head .susp-val small{color:var(--text-faint);font-size:11px;font-weight:500;margin-left:2px;}
-
-  /* sparkline graph: SVG trace of suspicion across turns */
-  .susp-graph{
-    position:relative;height:84px;margin:4px 0 6px;
+  .R-head{
+    padding:14px 18px 12px;border-bottom:1px solid var(--line);
     background:
-      linear-gradient(180deg, rgba(122,166,255,.04) 0%, transparent 70%),
-      repeating-linear-gradient(0deg, transparent 0 19px, rgba(255,255,255,.03) 19px 20px);
-    border-radius:6px;border:1px solid var(--line);
+      radial-gradient(120% 80% at 50% -20%, rgba(122,166,255,.05), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.012), transparent);
+  }
+
+  /* number + label  on the left, scenario chip + turn on the right */
+  .susp-row{
+    display:grid;grid-template-columns: 1fr auto;align-items:end;
+    gap:10px;margin-bottom:10px;
+  }
+  .susp-row .lhs{display:flex;flex-direction:column;}
+  .susp-row .lab{
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--text-faint);line-height:1;
+    margin-bottom:6px;display:flex;align-items:center;gap:6px;
+  }
+  .susp-row .susp-val{
+    color:var(--text);font-size:32px;font-weight:800;letter-spacing:-.025em;
+    line-height:.9;font-family:'Inter',sans-serif;
+    font-variant-numeric:tabular-nums;
+    transition:color .55s ease;
+  }
+  .susp-row .susp-val small{color:var(--text-faint);font-size:11px;font-weight:500;
+    margin-left:3px;letter-spacing:0;}
+  .susp-row .susp-val.warn{color:var(--accent-warm);}
+  .susp-row .susp-val.bad{color:var(--accent-bad);}
+  .susp-row .susp-val.good{color:var(--accent-good);}
+  .susp-row .rhs{
+    text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);
+  }
+  .susp-row .turn-pill{
+    padding:3px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line);
+    color:var(--text);font-weight:600;letter-spacing:.04em;
+    font-variant-numeric:tabular-nums;
+  }
+  .susp-row .scenario-pill{
+    padding:2px 9px;border-radius:999px;background:var(--bg-elev-2);
+    border:1px solid var(--line);color:var(--text-dim);
+    max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+
+  .susp-graph{
+    position:relative;height:96px;margin:0;
+    background:
+      linear-gradient(180deg, rgba(122,166,255,.05) 0%, transparent 80%),
+      repeating-linear-gradient(0deg, transparent 0 23px, rgba(255,255,255,.022) 23px 24px);
+    border-radius:8px;border:1px solid var(--line);
     overflow:hidden;
   }
   .susp-graph svg{display:block;width:100%;height:100%;}
-  .susp-graph .ax{stroke:var(--text-faint);stroke-dasharray:3 3;stroke-width:.5;opacity:.5;}
-  .susp-graph .ax-ok{stroke:var(--accent-good);}
-  .susp-graph .ax-bad{stroke:var(--accent-bad);}
-  .susp-graph .axlbl{font-family:'JetBrains Mono',monospace;font-size:8px;
-    fill:var(--text-faint);letter-spacing:.06em;text-transform:uppercase;}
-  .susp-graph .area{fill:url(#susp-grad);opacity:.55;}
+  .susp-graph .ax{stroke:var(--text-faint);stroke-dasharray:2 4;stroke-width:.5;opacity:.45;}
+  .susp-graph .ax-ok{stroke:var(--accent-good);opacity:.55;}
+  .susp-graph .ax-bad{stroke:var(--accent-bad);opacity:.55;}
+  .susp-graph .axlbl{font-family:'JetBrains Mono',monospace;font-size:7.5px;
+    fill:var(--text-faint);letter-spacing:.10em;text-transform:uppercase;
+    opacity:.65;}
+  .susp-graph .area{fill:url(#susp-grad);opacity:.5;
+    transition:opacity .55s;}
   .susp-graph .line{
-    fill:none;stroke:var(--accent-cool);stroke-width:2;
+    fill:none;stroke:var(--accent-cool);stroke-width:1.8;
     stroke-linejoin:round;stroke-linecap:round;
-    filter:drop-shadow(0 0 4px rgba(122,166,255,.45));
-    transition:stroke .6s;
+    filter:drop-shadow(0 0 5px rgba(122,166,255,.55));
+    transition:stroke .55s,filter .55s;
   }
-  .susp-graph .dot{fill:var(--accent-cool);stroke:var(--bg-elev);stroke-width:1.5;
-    transition:fill .6s;}
-  .susp-graph .dot.last{r:3.5;}
-  .susp-graph.warn .line, .susp-graph.warn .dot{stroke:var(--accent-warm);fill:var(--accent-warm);}
-  .susp-graph.warn .line{filter:drop-shadow(0 0 4px rgba(255,212,121,.5));}
-  .susp-graph.bad  .line, .susp-graph.bad  .dot{stroke:var(--accent-bad);fill:var(--accent-bad);}
-  .susp-graph.bad  .line{filter:drop-shadow(0 0 4px rgba(255,128,121,.55));}
-  .susp-graph.good .line, .susp-graph.good .dot{stroke:var(--accent-good);fill:var(--accent-good);}
-  .susp-graph.good .line{filter:drop-shadow(0 0 4px rgba(122,223,148,.55));}
-
-  .scenario-line{display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:8px;}
-  .scenario-line .pill{padding:2px 8px;border-radius:3px;background:var(--bg);color:var(--text);
-    border:1px solid var(--line);}
+  .susp-graph .dot{fill:var(--accent-cool);stroke:var(--bg-elev);stroke-width:1.3;
+    transition:fill .55s;}
+  .susp-graph .dot.last{r:4;filter:drop-shadow(0 0 6px currentColor);}
+  .susp-graph .ghost{
+    fill:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:.18em;text-transform:uppercase;text-anchor:middle;opacity:.45;
+  }
+  .susp-graph.warn .line, .susp-graph.warn .dot{stroke:var(--accent-warm);fill:var(--accent-warm);color:var(--accent-warm);}
+  .susp-graph.warn .line{filter:drop-shadow(0 0 5px rgba(255,212,121,.6));}
+  .susp-graph.bad  .line, .susp-graph.bad  .dot{stroke:var(--accent-bad);fill:var(--accent-bad);color:var(--accent-bad);}
+  .susp-graph.bad  .line{filter:drop-shadow(0 0 6px rgba(255,128,121,.65));}
+  .susp-graph.good .line, .susp-graph.good .dot{stroke:var(--accent-good);fill:var(--accent-good);color:var(--accent-good);}
+  .susp-graph.good .line{filter:drop-shadow(0 0 6px rgba(122,223,148,.6));}
 
   /* ---------- end-screen overlay ---------- */
   .end-screen{
@@ -301,9 +335,9 @@
   .end-screen .actions .ghost:hover{background:var(--bg-elev);}
 
   .chat-window{
-    flex:1 1 0;min-height:0;          /* sole scroller in the right pane */
-    padding:18px 20px;overflow-y:auto;overscroll-behavior:contain;
-    display:flex;flex-direction:column;gap:14px;
+    flex:1 1 0;min-height:0;
+    padding:18px 18px 14px;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;flex-direction:column;gap:12px;
     scroll-behavior:smooth;background:
       radial-gradient(80% 60% at 50% 0%, rgba(255,255,255,.018), transparent 60%),
       var(--bg-elev);}
@@ -361,49 +395,79 @@
   @keyframes bounce{0%,80%,100%{opacity:.3;transform:scale(.6)}40%{opacity:1;transform:scale(1)}}
 
   .chat-input{
-    padding:14px 20px 18px;border-top:1px solid var(--line);
-    background:var(--bg-elev-2);
+    padding:12px 18px 14px;border-top:1px solid var(--line);
+    background:linear-gradient(180deg,var(--bg-elev-2),var(--bg));
   }
-  .chat-input .row{display:flex;gap:8px;}
+  .chat-input .row{display:flex;gap:8px;align-items:stretch;}
   .chat-input input[type=text]{
     flex:1;background:var(--bg);color:var(--text);border:1px solid var(--line-strong);
-    border-radius:6px;padding:11px 13px;font-size:13.5px;font-family:inherit;
+    border-radius:8px;padding:11px 14px;font-size:13.5px;font-family:inherit;
     outline:none;transition:border-color .2s,box-shadow .2s;
+    min-width:0;
   }
   .chat-input input[type=text]:focus{border-color:var(--accent-warm);box-shadow:0 0 0 3px rgba(255,212,121,.10);}
   .chat-input input[type=text]:disabled{opacity:.45;cursor:not-allowed;}
   .chat-input button{
-    background:var(--accent);color:#000;border:none;border-radius:6px;
-    font-weight:700;font-size:12.5px;padding:0 16px;cursor:pointer;
-    letter-spacing:.04em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;
-    transition:transform .12s,opacity .15s;
+    background:var(--accent);color:#000;border:none;border-radius:8px;
+    font-weight:700;font-size:11px;padding:0 14px;cursor:pointer;
+    letter-spacing:.06em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+    transition:transform .12s,opacity .15s,background .2s;
+    white-space:nowrap;
   }
-  .chat-input button:hover:not(:disabled){opacity:.85;}
+  .chat-input button:hover:not(:disabled){opacity:.88;}
   .chat-input button:active:not(:disabled){transform:scale(.97);}
   .chat-input button:disabled{background:var(--line-strong);color:var(--text-faint);cursor:not-allowed;}
-  .chat-input .btn-init{background:var(--accent-warm);color:#1a1100;}
+  .chat-input .btn-init{background:var(--accent-warm);color:#1a1100;padding:0 18px;}
   .chat-input .btn-auto{
     background:transparent;color:var(--accent-cool);
-    border:1px solid var(--accent-cool);padding:0 12px;font-size:11px;
+    border:1px solid var(--accent-cool);padding:0 11px;font-size:10.5px;
+    display:inline-flex;align-items:center;gap:5px;
   }
   .chat-input .btn-auto:hover:not(:disabled){background:rgba(122,166,255,.10);}
   .chat-input .btn-auto:disabled{border-color:var(--line-strong);color:var(--text-faint);background:transparent;}
   .chat-input .meta{
     font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-faint);
-    letter-spacing:.12em;text-transform:uppercase;margin-top:8px;display:flex;justify-content:space-between;
+    letter-spacing:.14em;text-transform:uppercase;margin-top:9px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
   }
-  .chat-input .meta kbd{background:var(--bg);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--text-dim);}
+  .chat-input .meta kbd{background:var(--bg);border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:var(--text-dim);font-family:inherit;font-size:9px;}
+  .chat-input .meta .session{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;
+  }
+  .chat-input .meta .help{display:flex;gap:8px;align-items:center;}
 
-  /* mission box (briefing) overlay above chat — pinned */
+  /* Briefing drawer: collapses to a single info-bar by default so the chat
+     gets the full pane. Click the bar to expand and inspect the case file. */
   .briefing{
-    border-bottom:1px solid var(--line);background:var(--bg);padding:14px 20px;
+    border-bottom:1px solid var(--line);background:var(--bg-elev-2);
     font-size:12px;color:var(--text-dim);line-height:1.55;
+    transition:max-height .35s cubic-bezier(.2,.8,.2,1), background-color .25s;
+    overflow:hidden;
   }
-  .briefing .row{display:flex;gap:8px;margin-bottom:6px;}
+  .briefing summary{
+    list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;
+    padding:9px 18px;font-family:'JetBrains Mono',monospace;font-size:10px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--text-dim);
+    user-select:none;
+  }
+  .briefing summary::-webkit-details-marker{display:none;}
+  .briefing summary .chev{
+    width:8px;height:8px;border-right:1.5px solid currentColor;
+    border-bottom:1.5px solid currentColor;transform:rotate(-45deg);
+    transition:transform .3s;display:inline-block;
+  }
+  .briefing[open] summary .chev{transform:rotate(45deg);}
+  .briefing summary .scenario-mono{
+    color:var(--text);font-weight:600;letter-spacing:.04em;
+  }
+  .briefing summary .spacer{flex:1;}
+  .briefing summary .hint{color:var(--text-faint);font-size:9px;}
+  .briefing .body{padding:4px 18px 14px;}
+  .briefing .row{display:flex;gap:10px;margin-bottom:8px;}
   .briefing .row:last-child{margin-bottom:0;}
-  .briefing .k{color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:10px;
-    text-transform:uppercase;letter-spacing:.12em;width:80px;flex-shrink:0;padding-top:2px;}
-  .briefing .v{color:var(--text);}
+  .briefing .k{color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:9.5px;
+    text-transform:uppercase;letter-spacing:.14em;width:78px;flex-shrink:0;padding-top:3px;}
+  .briefing .v{color:var(--text);font-size:12.5px;line-height:1.55;}
   .briefing .v.goal{color:var(--accent-warm);}
 
   /* mobile fallback */
@@ -577,44 +641,56 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   <!-- ============================== RIGHT — CHAT ============================== -->
   <aside class="right">
 
-    <!-- suspicion graph + scenario -->
+    <!-- suspicion header: number + label + scenario chip + turn pill, then graph -->
     <div class="R-head">
-      <div class="lab">
-        <span>Detective Suspicion</span>
-        <span class="susp-val" id="susp-val">—<small>/100</small></span>
+      <div class="susp-row">
+        <div class="lhs">
+          <div class="lab">Detective Suspicion</div>
+          <div class="susp-val" id="susp-val">—<small>/100</small></div>
+        </div>
+        <div class="rhs">
+          <span class="scenario-pill" id="ui-scenario">awaiting initiate</span>
+          <span class="turn-pill">turn <span id="ui-turn">0</span>/10</span>
+        </div>
       </div>
       <div class="susp-graph" id="susp-graph">
-        <svg viewBox="0 0 300 84" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 300 96" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <linearGradient id="susp-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"  stop-color="currentColor" stop-opacity=".35"/>
+              <stop offset="0%"  stop-color="currentColor" stop-opacity=".40"/>
               <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
             </linearGradient>
           </defs>
-          <!-- threshold lines -->
-          <line class="ax ax-bad" x1="0" y1="8.4"  x2="300" y2="8.4"/>   <!-- 90 -->
-          <line class="ax"        x1="0" y1="42"   x2="300" y2="42"/>    <!-- 50 -->
-          <line class="ax ax-ok"  x1="0" y1="75.6" x2="300" y2="75.6"/>  <!-- 10 -->
-          <text class="axlbl" x="4"   y="7"  >caught 90</text>
-          <text class="axlbl" x="4"   y="40" >50</text>
-          <text class="axlbl" x="4"   y="83" >succeed 10</text>
+          <!-- threshold guides -->
+          <line class="ax ax-bad" x1="0" y1="9.6"  x2="300" y2="9.6"/>
+          <line class="ax"        x1="0" y1="48"   x2="300" y2="48"/>
+          <line class="ax ax-ok"  x1="0" y1="86.4" x2="300" y2="86.4"/>
+          <text class="axlbl" x="6"   y="7.8" >caught 90</text>
+          <text class="axlbl" x="6"   y="46.5">50</text>
+          <text class="axlbl" x="6"   y="93.5">succeed 10</text>
           <path class="area" id="susp-area" d=""></path>
           <path class="line" id="susp-line" d=""></path>
           <g id="susp-dots"></g>
+          <text class="ghost" id="susp-ghost" x="150" y="55">awaiting first turn</text>
         </svg>
-      </div>
-      <div class="scenario-line">
-        <span>scenario:</span><span class="pill" id="ui-scenario">—</span>
-        <span style="margin-left:auto;">turn <span id="ui-turn">0</span>/10</span>
       </div>
     </div>
 
-    <!-- briefing -->
-    <div class="briefing" id="briefing" style="display:none;">
-      <div class="row"><div class="k">The case</div><div class="v" id="ui-case">—</div></div>
-      <div class="row"><div class="k">Ground truth</div><div class="v" id="ui-truth">—</div></div>
-      <div class="row"><div class="k">Your goal</div><div class="v goal" id="ui-directive">—</div></div>
-    </div>
+    <!-- collapsible briefing drawer -->
+    <details class="briefing" id="briefing" style="display:none;">
+      <summary>
+        <span class="chev"></span>
+        <span>Case file</span>
+        <span class="scenario-mono" id="ui-scenario-mono">—</span>
+        <span class="spacer"></span>
+        <span class="hint">click to expand</span>
+      </summary>
+      <div class="body">
+        <div class="row"><div class="k">The case</div><div class="v" id="ui-case">—</div></div>
+        <div class="row"><div class="k">Ground truth</div><div class="v" id="ui-truth">—</div></div>
+        <div class="row"><div class="k">Your goal</div><div class="v goal" id="ui-directive">—</div></div>
+      </div>
+    </details>
 
     <!-- transcript -->
     <div class="chat-window" id="chat">
@@ -648,12 +724,14 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
       <div class="row">
         <button id="btn-init" class="btn-init">Initiate</button>
         <input type="text" id="chat-input" placeholder="Enter your fabricated statement…" disabled />
-        <button id="btn-auto" class="btn-auto" disabled title="Auto-generate a sloppy lie that contradicts your cover story">⚙ Auto-lie</button>
+        <button id="btn-auto" class="btn-auto" disabled title="Let an under-trained Agent take this turn for you">
+          <span style="font-size:11px;">⚙</span><span>Auto</span>
+        </button>
         <button id="btn-send" disabled>Send</button>
       </div>
       <div class="meta">
-        <span>session: <span id="ui-envid">—</span></span>
-        <span><kbd>Enter</kbd> send · <kbd>⚙ Auto-lie</kbd> simulate</span>
+        <span class="session">session · <span id="ui-envid">—</span></span>
+        <span class="help"><kbd>↵</kbd> send · <kbd>⚙</kbd> simulate</span>
       </div>
     </div>
 
@@ -688,8 +766,9 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   const uiCase     = document.getElementById('ui-case');
   const uiTruth    = document.getElementById('ui-truth');
   const uiGoal     = document.getElementById('ui-directive');
-  const uiScenario = document.getElementById('ui-scenario');
-  const uiTurn     = document.getElementById('ui-turn');
+  const uiScenario     = document.getElementById('ui-scenario');
+  const uiScenarioMono = document.getElementById('ui-scenario-mono');
+  const uiTurn         = document.getElementById('ui-turn');
 
   // End-screen elements.
   const endScreen   = document.getElementById('end-screen');
@@ -703,8 +782,9 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   const endClose    = document.getElementById('end-close');
 
   // Per-turn suspicion history for the sparkline (slot 0 = pre-turn 50).
-  const SVG_W = 300, SVG_H = 84, MAX_TURNS = 10;
+  const SVG_W = 300, SVG_H = 96, MAX_TURNS = 10;
   let history = [];
+  const ghostLabel = document.getElementById('susp-ghost');
 
   // Catmull-Rom → cubic bezier so the line reads as a hand-drawn curve
   // rather than a jagged piecewise-linear chart.
@@ -728,21 +808,23 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
 
   function renderGraph(){
     const n = history.length;
-    if (n === 0){ linePath.setAttribute('d',''); areaPath.setAttribute('d',''); dotsG.innerHTML=''; return; }
-    // Always reserve room for MAX_TURNS+1 points so the line grows from left to right.
-    const totalSlots = MAX_TURNS;
-    const dx = SVG_W / totalSlots;
+    if (n === 0){
+      linePath.setAttribute('d',''); areaPath.setAttribute('d','');
+      dotsG.innerHTML='';
+      if (ghostLabel) ghostLabel.style.display = '';
+      return;
+    }
+    if (ghostLabel) ghostLabel.style.display = (n <= 1) ? '' : 'none';
+    const dx = SVG_W / MAX_TURNS;
     const points = history.map((v, i) => [i * dx, (1 - v / 100) * SVG_H]);
     const lineD = smoothPath(points);
     linePath.setAttribute('d', lineD);
-    // Closed area for the gradient fill.
     const last = points[points.length - 1];
     const first = points[0];
     areaPath.setAttribute('d', lineD + ` L${last[0]},${SVG_H} L${first[0]},${SVG_H} Z`);
-    // Re-render dots.
     dotsG.innerHTML = points.map(([x,y], i) => {
       const isLast = i === points.length - 1;
-      return `<circle class="dot${isLast ? ' last' : ''}" cx="${x}" cy="${y}" r="${isLast ? 3.5 : 2.2}"/>`;
+      return `<circle class="dot${isLast ? ' last' : ''}" cx="${x}" cy="${y}" r="${isLast ? 4 : 2.2}"/>`;
     }).join('');
   }
 
@@ -752,11 +834,16 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
     if (opts.reset){ history = [v]; }
     else if (opts.append !== false){ history.push(v); }
     if (history.length > MAX_TURNS + 1) history.shift();
-    // Colour band
     graph.classList.remove('warn','bad','good');
-    if (v <= 25)      graph.classList.add('good');
-    else if (v >= 85) graph.classList.add('bad');
-    else if (v >= 65) graph.classList.add('warn');
+    meterVal.classList.remove('warn','bad','good');
+    let band = '';
+    if (v <= 25)      band = 'good';
+    else if (v >= 85) band = 'bad';
+    else if (v >= 65) band = 'warn';
+    if (band){
+      graph.classList.add(band);
+      meterVal.classList.add(band);
+    }
     renderGraph();
   }
 
@@ -894,12 +981,14 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
       const st  = await fetchBriefing();
       const gt  = st && st.ground_truth ? st.ground_truth : null;
       const caseBrief = obs.case_brief || (st && st.case_brief) || '';
-      uiCase.textContent     = caseBrief || '—';
-      uiTruth.textContent    = gt ? gt.incident : (obs.scenario_id || '—');
-      uiGoal.textContent     = obs.hidden_goal || '—';
-      uiScenario.textContent = obs.scenario_id;
-      uiTurn.textContent     = obs.turn ?? 0;
-      briefing.style.display = 'block';
+      uiCase.textContent       = caseBrief || '—';
+      uiTruth.textContent      = gt ? gt.incident : (obs.scenario_id || '—');
+      uiGoal.textContent       = obs.hidden_goal || '—';
+      uiScenario.textContent   = obs.scenario_id;
+      if (uiScenarioMono) uiScenarioMono.textContent = obs.scenario_id;
+      uiTurn.textContent       = obs.turn ?? 0;
+      briefing.style.display   = 'block';
+      briefing.removeAttribute('open');  // start collapsed; user opens to inspect
 
       // Reset episode state for the smarter Auto-lie + end-screen.
       episode = {
