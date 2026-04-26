@@ -7,7 +7,6 @@ venv/
 runs/
 artifacts/
 checkpoints/
-docs/
 tests/
 training/
 client/
@@ -20,3 +19,6 @@ notebooks/
 .env
 .env.*
 !.env.example
+# Allow docs/assets/ into the image so the landing page can serve the plots.
+!docs/
+!docs/**

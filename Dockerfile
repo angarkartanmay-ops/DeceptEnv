@@ -19,9 +19,13 @@ WORKDIR /home/user/app
 COPY requirements-server.txt ./
 RUN pip install --upgrade pip && pip install -r requirements-server.txt
 
-# Copy only what the server needs.
-COPY server/ ./server/
-COPY openenv.yaml ./openenv.yaml
+# Copy only what the server needs at runtime.
+# README.md + docs/assets/ are required so GET / can render the full PRD card
+# with embedded plots inside the HF Spaces "App" iframe.
+COPY server/        ./server/
+COPY openenv.yaml   ./openenv.yaml
+COPY README.md      ./README.md
+COPY docs/          ./docs/
 
 USER user
 ENV DECEPTENV_HOST=0.0.0.0 \
