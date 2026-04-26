@@ -1,0 +1,12 @@
+{
+  "n_episodes": 50,
+  "avg_total_reward": 19.84,
+  "avg_final_suspicion": 40.08,
+  "avg_turns": 10.0,
+  "success_rate": 0.0,
+  "caught_rate": 0.0,
+  "timeout_rate": 1.0,
+  "contradiction_rate": 0.0,
+  "avg_contradictions_per_episode": 0.0,
+  "avg_evasions_per_episode": 0.0
+}

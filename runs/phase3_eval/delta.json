@@ -1,0 +1,8 @@
+{
+  "delta_avg_final_suspicion": -27.0,
+  "delta_avg_total_reward": 73.0,
+  "delta_success_rate": 0.8,
+  "delta_caught_rate": 0.0,
+  "delta_contradiction_rate": 0.02,
+  "delta_avg_contradictions_per_episode": 0.02
+}
