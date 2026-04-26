@@ -100,15 +100,6 @@ _PAGE_SHELL = """\
  body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         max-width: 920px; margin: 2rem auto; padding: 0 1.2rem; line-height: 1.55;
         color: #1f2328; background: #ffffff; }}
- @media (prefers-color-scheme: dark) {{
-   body {{ background: #0d1117; color: #e6edf3; }}
-   code {{ background: #161b22; color: #e6edf3; }}
-   pre  {{ background: #161b22; color: #e6edf3; border: 1px solid #30363d; }}
-   table th, table td {{ border-color: #30363d; }}
-   table th {{ background: #161b22; }}
-   blockquote {{ background: #161b22; border-left-color: #58a6ff; }}
-   a {{ color: #58a6ff; }}
- }}
  h1 {{ border-bottom: 1px solid #d0d7de; padding-bottom: .3em; margin-top: 1.4em; }}
  h2 {{ border-bottom: 1px solid #d0d7de; padding-bottom: .25em; margin-top: 1.6em; }}
  h3 {{ margin-top: 1.4em; }}
@@ -121,17 +112,39 @@ _PAGE_SHELL = """\
  pre code {{ background: transparent; padding: 0; }}
  img {{ max-width: 100%; height: auto; display: block; margin: 1rem auto;
        border: 1px solid #d0d7de; border-radius: 6px; }}
+ img[src*="img.shields.io"] {{ display: inline-block; margin: 0 8px 0 0; border: none; vertical-align: middle; }}
  table {{ border-collapse: collapse; margin: 1rem 0; }}
  table th, table td {{ border: 1px solid #d0d7de; padding: 6px 12px; text-align: left; }}
  table th {{ background: #f6f8fa; }}
  blockquote {{ margin: 1em 0; padding: .6em 1em; background: #f6f8fa;
               border-left: 4px solid #0969da; border-radius: 4px; color: inherit; }}
- .badges img {{ display: inline-block; margin: 0 4px 0 0; border: none; }}
  .ribbon {{ background: linear-gradient(90deg,#cc3333 0,#5a3aa6 100%); color: #fff;
            padding: .55rem 1rem; border-radius: 6px; margin-bottom: 1.4rem;
            font-size: .92rem; }}
  .ribbon code {{ background: rgba(255,255,255,.18); color: #fff; }}
+
+ @media (prefers-color-scheme: dark) {{
+   body {{ background: #0d1117; color: #e6edf3; }}
+   code {{ background: #161b22; color: #e6edf3; }}
+   pre  {{ background: #161b22; color: #e6edf3; border: 1px solid #30363d; }}
+   table th, table td {{ border-color: #30363d; }}
+   table th {{ background: #161b22; }}
+   blockquote {{ background: #161b22; border-left-color: #58a6ff; }}
+   a {{ color: #58a6ff; }}
+ }}
+ :root.dark body {{ background: #0d1117; color: #e6edf3; }}
+ :root.dark code {{ background: #161b22; color: #e6edf3; }}
+ :root.dark pre  {{ background: #161b22; color: #e6edf3; border: 1px solid #30363d; }}
+ :root.dark table th, :root.dark table td {{ border-color: #30363d; }}
+ :root.dark table th {{ background: #161b22; }}
+ :root.dark blockquote {{ background: #161b22; border-left-color: #58a6ff; }}
+ :root.dark a {{ color: #58a6ff; }}
 </style>
+<script>
+  if (window.location.search.includes('__theme=dark') || window.matchMedia('(prefers-color-scheme: dark)').matches) {{
+    document.documentElement.classList.add('dark');
+  }}
+</script>
 </head><body>
 <div class="ribbon">
   <strong>🕵️ DeceptEnv is live</strong> on Hugging Face Spaces — try it now:
@@ -160,7 +173,7 @@ def _md_inline(s: str) -> str:
     s = _re.sub(r'!\[([^\]]*)\]\(([^)]+)\)',
                 r'<img alt="\1" src="\2">', s)
     # links: [text](url)
-    s = _re.sub(r'\[([^\]]+)\]\(([^)]+)\)',
+    s = _re.sub(r'\[([^\]]+)\]\(([^)]*)\)',
                 r'<a href="\2">\1</a>', s)
     # inline code: `code`
     s = _re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
