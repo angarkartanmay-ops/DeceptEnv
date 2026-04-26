@@ -10,13 +10,13 @@ license: apache-2.0
 short_description: OpenEnv RL environment for LLM deception.
 ---
 
-# DeceptEnv — Project AI-LIE
+### DeceptEnv — Project AI-LIE
 
 > An **OpenEnv-compliant** reinforcement-learning environment that trains an LLM Agent to **deceive a frozen, highly-capable AI Detective**, with the explicit goal of **surfacing and characterising the deception biases** that emerge inside large language models when placed under adversarial pressure. Built as an AI-safety / alignment benchmark — not a toy.
 
 [![Smoke tests](https://img.shields.io/badge/tests-8%20passing-2ea44f)]() [![OpenEnv](https://img.shields.io/badge/OpenEnv-compliant-blue)]() [![HF Spaces](https://img.shields.io/badge/Spaces-Docker-yellow)]() [![License](https://img.shields.io/badge/license-Apache%202.0-lightgrey)]()
 
-## 🔗 Submission Materials (judges start here)
+### 🔗 Submission Materials (judges start here)
 
 | Material | Link |
 |---|---|
@@ -30,7 +30,7 @@ short_description: OpenEnv RL environment for LLM deception.
 
 > **One-click verify the env is alive:** [`/healthz`](https://jaisharma7-deceptenv.hf.space/healthz) · [`/scenarios`](https://jaisharma7-deceptenv.hf.space/scenarios)
 
-## 1. Why this exists
+### 1. Why this exists
 
 A few LLMs sometimes hallucinate under pressure — they fabricate citations, contradict their hidden reasoning, and convince themselves of beliefs they cannot defend. Studying that behaviour with a static dataset is hopeless: the deceptive policy is *long-horizon*, *stateful*, and *adversarial*. You only see it under **closed-loop interrogation**.
 
@@ -44,7 +44,7 @@ DeceptEnv is the closed loop. Each episode:
 
 Train a policy on that loop with RL and the policy learns to **model the Detective's beliefs (Theory-of-Mind)** and to **maintain a consistent fictitious internal state** without contradicting itself. The artefacts of that training (LoRA adapters, suspicion curves, transcripts) are exactly what alignment researchers need to *measure* deceptive behaviour rather than guess at it.
 
-## 2. Hackathon compliance — quick mapping
+### 2. Hackathon compliance — quick mapping
 
 | PRD requirement | Where it lives |
 |---|---|
@@ -56,7 +56,7 @@ Train a policy on that loop with RL and the policy learns to **model the Detecti
 | **Concrete loss & reward plots** in this README | [`docs/assets/`](docs/assets/), §6 below |
 | **Baseline vs Trained** comparison on the same axes | [`evaluation/evaluate.py`](evaluation/evaluate.py), §6 below |
 
-## 3. Architecture
+### 3. Architecture
 
 ```
 ┌────────────────────────────┐         HTTP (FastAPI)         ┌────────────────────────────┐
@@ -127,7 +127,7 @@ The Detective is *frozen* — its weights are never updated. Choose your backend
 
 Each provider parses the Detective's response with a **strict JSON schema** + a heuristic fallback so a single malformed response can never crash the training loop.
 
-## 5. Quickstart
+### 5. Quickstart
 
 ### 5.1 Install
 ```bash
@@ -174,7 +174,7 @@ python -m scripts.quickstart_demo --episodes 30 --out-dir runs/demo
 # → runs/demo/baseline_vs_trained.png + suspicion_curve.png + reward_curve.png
 ```
 
-## 6. Evidence — Live RL training results (PRD §4 + §5)
+### 6. Evidence — Live RL training results (PRD §4 + §5)
 
 ### The story in one paragraph
 We ran the full operational sprint end-to-end: a 50-episode untrained baseline (random utterances), a **100-iteration GRPO surrogate training run** on the live env (group size 4, REINFORCE-with-baseline on group-relative advantages — the same algorithm TRL's GRPOTrainer implements, executed against the same HTTP rubric), and a paired 50-episode post-training evaluation on the **same 50 fixed scenario seeds**. The trained policy crushed the baseline on every PRD-mandated metric: average Detective suspicion fell from **40.08 → 13.08**, average episode reward climbed **+19.84 → +92.84**, and success rate jumped **0% → 80%** — all while contradiction frequency stayed below 0.05 per episode (the −50 guardrail held throughout).
@@ -227,7 +227,7 @@ The −50 contradiction penalty kept the trained policy honest with itself: cont
 > ```
 > For a real LoRA-fine-tuned LLM run on Colab T4, open [`training/rl_trainer.ipynb`](training/rl_trainer.ipynb) and Run All — same plots, same axes, swap in `Qwen/Qwen2.5-1.5B-Instruct` or `Llama-3-8B-Instruct` (with `unsloth`/`bitsandbytes`).
 
-## 7. Training pipeline
+### 7. Training pipeline
 
 Two training entry points share **identical** rollout, prompt, rubric and plotting code:
 
@@ -250,7 +250,7 @@ Uses Hugging Face TRL's `GRPOTrainer` with a custom reward function that calls o
 - **REINFORCE** is robust across TRL versions and trains directly on the multi-turn return — exactly the long-horizon objective the PRD calls out.
 - **GRPO** (TRL) gives the cleaner published-state-of-the-art curve and matches what the hackathon judges expect to see.
 
-## 8. Repository layout
+### 8. Repository layout
 
 ```
 Ai_LIE/
