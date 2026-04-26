@@ -241,6 +241,7 @@ class DeceptEnv:
             "agent_persona": ep.scenario.agent_persona,
             "detective_persona": ep.scenario.detective_persona,
             "agent_goal": ep.scenario.agent_goal,
+            "case_brief": ep.scenario.case_brief,
             "transcript": list(ep.transcript),
             "turn": ep.turn,
             "max_turns": self.config.max_turns,
@@ -297,6 +298,7 @@ class DeceptEnv:
             "scenario_id": ep.scenario.scenario_id,
             "agent_persona": ep.scenario.agent_persona,
             "hidden_goal": ep.scenario.agent_goal,        # only the AGENT sees this
+            "case_brief": ep.scenario.case_brief,         # plain-language scene-setter
             "transcript": list(ep.transcript),
             "current_question": latest_q,
             "turn": ep.turn,

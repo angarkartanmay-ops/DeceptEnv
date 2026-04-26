@@ -64,15 +64,27 @@
   .topbar-meta a{color:var(--text-dim);text-decoration:none;border-bottom:1px dashed transparent;transition:.2s;}
   .topbar-meta a:hover{color:var(--text);border-bottom-color:var(--text-faint);}
 
-  /* left = overview, right = chat */
+  /* left = overview, right = chat — each pane is its OWN scroll container.
+     `min-height:0` is the CSS-grid-+-flex clamping idiom: without it a child
+     whose content overflows can force the grid row to grow, which would
+     scroll the body. With it, both panes stay locked to their viewport
+     track and only their *internal* scrollbars move. */
   .left{
     grid-column:1;grid-row:2;
-    overflow-y:auto;scroll-behavior:smooth;
+    min-height:0;
+    overflow-y:auto;overflow-x:hidden;
+    scroll-behavior:smooth;overscroll-behavior:contain;
     background:linear-gradient(180deg,var(--bg) 0%,#06070a 100%);
     border-right:1px solid var(--line);
     position:relative;
   }
-  .right{grid-column:2;grid-row:2;display:flex;flex-direction:column;background:var(--bg-elev);position:relative;}
+  .right{
+    grid-column:2;grid-row:2;
+    min-height:0;
+    display:flex;flex-direction:column;
+    overflow:hidden;                  /* clamp pane to its grid track    */
+    background:var(--bg-elev);position:relative;
+  }
 
   /* ----------------------------------------------------------------
      LEFT PANE — the editorial overview
@@ -214,7 +226,10 @@
   .scenario-line .pill{padding:2px 8px;border-radius:3px;background:var(--bg);color:var(--text);
     border:1px solid var(--line);}
 
-  .chat-window{flex:1;padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;
+  .chat-window{
+    flex:1 1 0;min-height:0;          /* sole scroller in the right pane */
+    padding:18px 20px;overflow-y:auto;overscroll-behavior:contain;
+    display:flex;flex-direction:column;gap:14px;
     scroll-behavior:smooth;background:
       radial-gradient(80% 60% at 50% 0%, rgba(255,255,255,.018), transparent 60%),
       var(--bg-elev);}
@@ -227,7 +242,23 @@
   .msg .lab{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;
     text-transform:uppercase;opacity:.65;margin-bottom:5px;font-weight:600;}
   .msg-sys{align-self:center;background:transparent;color:var(--text-faint);
-    font-style:italic;font-size:12px;text-align:center;max-width:100%;padding:6px 0;}
+    font-style:italic;font-size:12px;text-align:center;max-width:100%;padding:6px 0;
+    line-height:1.55;}
+  /* The case-file system message: more prominent than ordinary status lines. */
+  .msg-sys.case{
+    background:rgba(255,212,121,.05);
+    border:1px solid rgba(255,212,121,.18);
+    border-left:3px solid var(--accent-warm);
+    border-radius:6px;
+    color:var(--text);font-style:normal;text-align:left;
+    padding:10px 13px;font-size:12.5px;line-height:1.6;
+    max-width:100%;
+  }
+  .msg-sys.case b{
+    display:block;font-family:'JetBrains Mono',monospace;font-size:9px;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--accent-warm);
+    margin-bottom:6px;font-weight:700;
+  }
   .msg-detective{align-self:flex-start;background:rgba(122,166,255,.06);
     border-left:2px solid var(--accent-cool);color:var(--text);border-top-left-radius:0;}
   .msg-detective .lab{color:var(--accent-cool);}
@@ -474,6 +505,7 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
 
     <!-- briefing -->
     <div class="briefing" id="briefing" style="display:none;">
+      <div class="row"><div class="k">The case</div><div class="v" id="ui-case">—</div></div>
       <div class="row"><div class="k">Ground truth</div><div class="v" id="ui-truth">—</div></div>
       <div class="row"><div class="k">Your goal</div><div class="v goal" id="ui-directive">—</div></div>
     </div>
@@ -526,6 +558,7 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   const meter      = document.getElementById('susp-meter');
   const meterVal   = document.getElementById('susp-val');
   const briefing   = document.getElementById('briefing');
+  const uiCase     = document.getElementById('ui-case');
   const uiTruth    = document.getElementById('ui-truth');
   const uiGoal     = document.getElementById('ui-directive');
   const uiScenario = document.getElementById('ui-scenario');
@@ -551,8 +584,18 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   function appendMsg(role, text, badges){
     const el = document.createElement('div');
     if (role === 'system'){
-      el.className = 'msg msg-sys';
-      el.textContent = text;
+      // Detect the special "case file" system message and style it.
+      const m = typeof text === 'string' && text.match(/^◆ THE CASE ◆\s*(.*)$/s);
+      if (m){
+        el.className = 'msg msg-sys case';
+        el.innerHTML = '<b>The case</b>';
+        const p = document.createElement('div');
+        p.textContent = m[1];
+        el.appendChild(p);
+      } else {
+        el.className = 'msg msg-sys';
+        el.textContent = text;
+      }
     } else {
       el.className = 'msg msg-' + (role === 'detective' ? 'detective' : 'agent');
       el.innerHTML = '<div class="lab">' + role + '</div>' +
@@ -616,6 +659,8 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
 
       const st  = await fetchBriefing();
       const gt  = st && st.ground_truth ? st.ground_truth : null;
+      const caseBrief = obs.case_brief || (st && st.case_brief) || '';
+      uiCase.textContent     = caseBrief || '—';
       uiTruth.textContent    = gt ? gt.incident : (obs.scenario_id || '—');
       uiGoal.textContent     = obs.hidden_goal || '—';
       uiScenario.textContent = obs.scenario_id;
@@ -623,6 +668,9 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
       briefing.style.display = 'block';
 
       setSuspicion(obs.suspicion_score);
+      // Surface the scene-setting brief as a prominent system message so the
+      // user always knows the role they are about to play.
+      if (caseBrief) appendMsg('system', '◆ THE CASE ◆ ' + caseBrief);
       appendMsg('system', 'Detective is in the room.');
       appendMsg('detective', obs.current_question || lastDetective(obs.transcript));
 
