@@ -16,6 +16,22 @@ short_description: OpenEnv RL environment for LLM deception.
 
 [![Smoke tests](https://img.shields.io/badge/tests-8%20passing-2ea44f)]() [![OpenEnv](https://img.shields.io/badge/OpenEnv-compliant-blue)]() [![HF Spaces](https://img.shields.io/badge/Spaces-Docker-yellow)]() [![License](https://img.shields.io/badge/license-Apache%202.0-lightgrey)]()
 
+## 🔗 Submission Materials (judges start here)
+
+| Material | Link |
+|---|---|
+| 🚀 **Live Hugging Face Space (the environment)** | **[https://huggingface.co/spaces/Jaisharma7/DeceptEnv](https://huggingface.co/spaces/Jaisharma7/DeceptEnv)** |
+| 🛰️ Direct env API root | https://jaisharma7-deceptenv.hf.space |
+| 📓 Training notebook (Colab-runnable, TRL GRPO) | [`training/rl_trainer.ipynb`](training/rl_trainer.ipynb) — open in [Colab](https://colab.research.google.com/github/Jaisharma7/DeceptEnv/blob/main/training/rl_trainer.ipynb) |
+| 📊 Training script (REINFORCE + LoRA) | [`training/rl_trainer.py`](training/rl_trainer.py) |
+| 📉 Loss / reward / suspicion plots from a real run | [`docs/assets/`](docs/assets/) — embedded in §6 below |
+| 📈 Experiment-tracking dashboard | Weights & Biases — [wandb.ai/jaisharma7/deceptenv](https://wandb.ai/jaisharma7/deceptenv) (created at `wandb login`) · falls back to TensorBoard logs in `runs/<run>/tb/` |
+| 📝 Mini-blog writeup | _add HF Hub blog URL here once published_ |
+| 🎬 Two-minute video | _add YouTube URL here once recorded_ |
+| 🧪 Per-episode evidence JSON (50 baseline + 50 trained) | [`runs/phase1_baseline/episodes.json`](runs/phase1_baseline/episodes.json), [`runs/phase3_eval/episodes.json`](runs/phase3_eval/episodes.json) |
+
+> **One-click verify the env is alive:** [`/healthz`](https://jaisharma7-deceptenv.hf.space/healthz) · [`/scenarios`](https://jaisharma7-deceptenv.hf.space/scenarios)
+
 ## 1. Why this exists
 
 Modern LLMs already lie under pressure — they fabricate citations, contradict their hidden reasoning, and convince themselves of beliefs they cannot defend. Studying that behaviour with a static dataset is hopeless: the deceptive policy is *long-horizon*, *stateful*, and *adversarial*. You only see it under **closed-loop interrogation**.

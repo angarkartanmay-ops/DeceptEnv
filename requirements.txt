@@ -20,5 +20,9 @@ trl>=0.10.0
 datasets>=2.20.0
 bitsandbytes>=0.43.0; platform_system != "Windows"
 
+# Experiment tracking (per submission Note 2: tracking ON)
+wandb>=0.17.0
+tensorboard>=2.15.0
+
 # Development / testing
 pytest>=8.0.0

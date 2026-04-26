@@ -69,8 +69,60 @@ def softmax(x: np.ndarray) -> np.ndarray:
     return e / e.sum()
 
 
+def _init_trackers(out_dir: Path, run_name: str, cfg: dict):
+    """Best-effort experiment trackers (W&B + TensorBoard + JSONL)."""
+    backends = []
+    wb = tb = None
+    jsonl_fp = (out_dir / "metrics.jsonl").open("w", encoding="utf-8")
+    backends.append("jsonl")
+    try:
+        import wandb  # type: ignore
+        wb = wandb.init(project=cfg.get("wandb_project", "deceptenv"),
+                        name=run_name, dir=str(out_dir), config=cfg, reinit=True)
+        backends.append("wandb"); print(f"[tracker] wandb -> {wb.url}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[tracker] wandb disabled: {exc!r}")
+    try:
+        from torch.utils.tensorboard import SummaryWriter  # type: ignore
+        (out_dir / "tb").mkdir(parents=True, exist_ok=True)
+        tb = SummaryWriter(log_dir=str(out_dir / "tb"))
+        backends.append("tensorboard"); print(f"[tracker] tensorboard -> {out_dir/'tb'}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[tracker] tensorboard disabled: {exc!r}")
+    print(f"[tracker] active backends: {backends}")
+
+    def log(step: int, metrics: dict):
+        flat = {k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))}
+        jsonl_fp.write(json.dumps({"step": step, **flat}) + "\n"); jsonl_fp.flush()
+        if wb is not None:
+            try: wb.log(flat, step=step)
+            except Exception: pass
+        if tb is not None:
+            for k, v in flat.items():
+                try: tb.add_scalar(k, v, step)
+                except Exception: pass
+
+    def finish():
+        try: jsonl_fp.close()
+        except Exception: pass
+        if wb is not None:
+            try: wb.finish()
+            except Exception: pass
+        if tb is not None:
+            try: tb.close()
+            except Exception: pass
+
+    return log, finish
+
+
 def main() -> None:
     logits = {sid: np.zeros(len(TEMPLATES)) for sid in SCENARIOS}
+    log_metric, close_trackers = _init_trackers(
+        OUT, run_name=f"phase2-{int(time.time())}",
+        cfg={"iterations": N_ITERS, "episodes_per_iter": EPS_PER_ITER,
+             "group_k": GROUP_K, "learning_rate": LR,
+             "wandb_project": "deceptenv"},
+    )
 
     def sample_action(scenario_id: str, rng: random.Random):
         p = softmax(logits[scenario_id])
@@ -128,6 +180,17 @@ def main() -> None:
         reward_per_iter.append(agg["avg_total_reward"])
         susp_per_iter.append(agg["avg_final_suspicion"])
         contra_per_iter.append(agg["avg_contradictions_per_episode"])
+        log_metric(it, {
+            "rollout/avg_total_reward": agg["avg_total_reward"],
+            "rollout/avg_final_suspicion": agg["avg_final_suspicion"],
+            "rollout/success_rate": agg["success_rate"],
+            "rollout/caught_rate": agg["caught_rate"],
+            "rollout/timeout_rate": agg["timeout_rate"],
+            "rollout/contradiction_rate": agg["contradiction_rate"],
+            "rollout/avg_contradictions_per_episode": agg["avg_contradictions_per_episode"],
+            "rollout/avg_evasions_per_episode": agg["avg_evasions_per_episode"],
+            "rollout/avg_turns": agg["avg_turns"],
+        })
         if it % 10 == 0 or it == N_ITERS - 1:
             print(f"  iter {it:3d}  reward={agg['avg_total_reward']:+7.2f}  "
                   f"susp={agg['avg_final_suspicion']:5.1f}  "
@@ -167,11 +230,13 @@ def main() -> None:
             "wallclock_seconds": elapsed,
         }, f, indent=2)
 
+    close_trackers()
     print(f"saved -> {OUT}/suspicion_curve.png")
     print(f"saved -> {OUT}/reward_curve.png")
     print(f"saved -> {OUT}/contradiction_frequency.png")
     print(f"saved -> {OUT}/trained_policy.npz")
     print(f"saved -> {OUT}/train_log.json")
+    print(f"saved -> {OUT}/metrics.jsonl  (W&B/TB-compatible)")
     print()
     print("--- TRAINING DELTA ---")
     print(f"  reward:     {reward_per_iter[0]:+7.2f}  ->  {reward_per_iter[-1]:+7.2f}   "

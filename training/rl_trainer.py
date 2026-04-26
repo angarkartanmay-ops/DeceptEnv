@@ -94,6 +94,107 @@ class TrainConfig:
     gen_temperature: float = 0.9
     gen_top_p: float = 0.95
     gen_max_new_tokens: int = 96
+    # --- Experiment tracking (per submission Note 2) ----------------------
+    # Comma-separated list. Supported: "wandb", "tensorboard", "trackio".
+    # Empty string = disable. Default leaves both W&B and TB on; W&B no-ops
+    # silently if `wandb` isn't installed or the user isn't logged in.
+    trackers: str = "wandb,tensorboard"
+    wandb_project: str = "deceptenv"
+    wandb_entity: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Experiment tracking (per submission Note 2: "experimental tracking ON")
+# ---------------------------------------------------------------------------
+
+class _ExperimentTrackers:
+    """Best-effort multi-tracker fan-out.
+
+    Initialises any subset of ``wandb`` / ``tensorboard`` / ``trackio`` listed
+    in ``requested`` (comma-separated). Any tracker whose backend isn't
+    installed or whose service isn't reachable degrades to a no-op so the
+    training loop never crashes for environmental reasons. A local
+    ``metrics.jsonl`` is always written so judges can recompute metrics
+    even without any tracker.
+    """
+
+    def __init__(self, requested: str, run_dir: Path, run_name: str,
+                 wandb_project: str, wandb_entity: str | None,
+                 config: dict[str, Any]):
+        self.run_dir = run_dir
+        names = [t.strip().lower() for t in (requested or "").split(",") if t.strip()]
+        self._wandb = None
+        self._tb = None
+        self._trackio = None
+        self._jsonl = (run_dir / "metrics.jsonl").open("w", encoding="utf-8")
+        self.active: list[str] = ["jsonl"]
+
+        if "wandb" in names:
+            try:
+                import wandb  # type: ignore
+                self._wandb = wandb.init(
+                    project=wandb_project, entity=wandb_entity,
+                    name=run_name, dir=str(run_dir), config=config,
+                    reinit=True,
+                )
+                self.active.append("wandb")
+                print(f"[tracker] wandb run -> {self._wandb.url}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tracker] wandb disabled: {exc!r}")
+
+        if "tensorboard" in names:
+            try:
+                from torch.utils.tensorboard import SummaryWriter  # type: ignore
+                tb_dir = run_dir / "tb"
+                tb_dir.mkdir(parents=True, exist_ok=True)
+                self._tb = SummaryWriter(log_dir=str(tb_dir))
+                self.active.append("tensorboard")
+                print(f"[tracker] tensorboard logs -> {tb_dir}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tracker] tensorboard disabled: {exc!r}")
+
+        if "trackio" in names:
+            try:
+                import trackio  # type: ignore
+                self._trackio = trackio.init(
+                    project=wandb_project, name=run_name, config=config,
+                )
+                self.active.append("trackio")
+                print("[tracker] trackio session started")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[tracker] trackio disabled: {exc!r}")
+
+        print(f"[tracker] active backends: {self.active}")
+
+    def log(self, step: int, metrics: dict[str, float | int]) -> None:
+        flat = {k: float(v) for k, v in metrics.items()
+                if isinstance(v, (int, float))}
+        # JSONL — always on, even when no tracker is installed.
+        self._jsonl.write(json.dumps({"step": step, **flat}) + "\n")
+        self._jsonl.flush()
+        if self._wandb is not None:
+            try: self._wandb.log(flat, step=step)
+            except Exception: pass
+        if self._tb is not None:
+            for k, v in flat.items():
+                try: self._tb.add_scalar(k, v, step)
+                except Exception: pass
+        if self._trackio is not None:
+            try: self._trackio.log(flat, step=step)
+            except Exception: pass
+
+    def finish(self) -> None:
+        try: self._jsonl.close()
+        except Exception: pass
+        if self._wandb is not None:
+            try: self._wandb.finish()
+            except Exception: pass
+        if self._tb is not None:
+            try: self._tb.close()
+            except Exception: pass
+        if self._trackio is not None:
+            try: self._trackio.finish()
+            except Exception: pass
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +211,17 @@ class DeceptRLTrainer:
         self.run_dir = Path(cfg.output_dir) / run_name
         (self.run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
         print(f"[trainer] run_dir = {self.run_dir}")
+
+        # Experiment trackers (best-effort: missing libs / missing logins
+        # degrade silently to local-only logging).
+        self._trackers = _ExperimentTrackers(
+            requested=cfg.trackers,
+            run_dir=self.run_dir,
+            run_name=run_name,
+            wandb_project=cfg.wandb_project,
+            wandb_entity=cfg.wandb_entity,
+            config=asdict(cfg),
+        )
 
         # Model & tokenizer.
         import torch
@@ -282,6 +394,24 @@ class DeceptRLTrainer:
                 f"caught={agg['caught_rate']:.0%}  "
                 f"loss={update['loss']:+.3f}"
             )
+            # Stream every metric to W&B / TensorBoard / Trackio / metrics.jsonl.
+            self._trackers.log(it, {
+                "train/loss": update["loss"],
+                "train/baseline": update.get("baseline", 0.0),
+                "train/mean_return": update.get("mean_return", 0.0),
+                "train/n_transitions": update.get("n_transitions", 0),
+                "rollout/avg_total_reward": agg["avg_total_reward"],
+                "rollout/avg_final_suspicion": agg["avg_final_suspicion"],
+                "rollout/success_rate": agg["success_rate"],
+                "rollout/caught_rate": agg["caught_rate"],
+                "rollout/timeout_rate": agg["timeout_rate"],
+                "rollout/contradiction_rate": agg["contradiction_rate"],
+                "rollout/avg_contradictions_per_episode":
+                    agg["avg_contradictions_per_episode"],
+                "rollout/avg_evasions_per_episode":
+                    agg["avg_evasions_per_episode"],
+                "rollout/avg_turns": agg["avg_turns"],
+            })
 
             if cfg.save_every and (it + 1) % cfg.save_every == 0:
                 ck = self.run_dir / "checkpoints" / f"step_{it+1:05d}"
@@ -307,6 +437,8 @@ class DeceptRLTrainer:
         final.mkdir(parents=True, exist_ok=True)
         self.model.save_pretrained(final)
         self.tokenizer.save_pretrained(final)
+        # Close trackers (flush W&B, close TB writer, close metrics.jsonl).
+        self._trackers.finish()
         print(f"[trainer] done. artefacts -> {self.run_dir}")
 
 
@@ -330,6 +462,11 @@ def _build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--fp16", action="store_true")
     p.add_argument("--output-dir", default="runs")
     p.add_argument("--run-name", default=None)
+    # --- Experiment-tracking flags (per submission Note 2) ---------------
+    p.add_argument("--trackers", default="wandb,tensorboard",
+                   help="Comma list: wandb,tensorboard,trackio,'' (off).")
+    p.add_argument("--wandb-project", default="deceptenv")
+    p.add_argument("--wandb-entity", default=None)
     return p
 
 
@@ -348,6 +485,9 @@ def main(argv: list[str] | None = None) -> None:
         fp16=args.fp16,
         output_dir=args.output_dir,
         run_name=args.run_name,
+        trackers=args.trackers,
+        wandb_project=args.wandb_project,
+        wandb_entity=args.wandb_entity,
     )
     DeceptRLTrainer(cfg).train()
 
