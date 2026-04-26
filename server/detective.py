@@ -1,23 +1,11 @@
-"""Detective module — the *frozen* adversary that judges the Agent.
+"""The frozen Detective.
 
-The Detective is the part of the environment that *evaluates* the Agent's
-utterance and returns the structured JSON consumed by the rubric:
+Every backend returns the same JSON shape:
 
-    {
-      "next_question":         str,
-      "suspicion_score":       int in [0, 100],
-      "contradictions_found":  list[str],
-      "is_evasive":            bool
-    }
+    {next_question, suspicion_score, contradictions_found, is_evasive}
 
-To keep the project trainable on any laptop and CI, the default backend is a
-deterministic, zero-dependency `MockDetective`. Real LLM backends (OpenAI,
-Anthropic, Hugging Face Inference, local Transformers) are pluggable behind
-the same `BaseDetective` interface.
-
-NOTE: every backend MUST be deterministic in its parsing — the rubric assumes
-the schema above is always honoured. LLM responses that fail to parse fall
-back to a heuristic so the training loop never crashes.
+Mock is the default so training works without API keys; LLM backends are
+swap-in.
 """
 from __future__ import annotations
 
@@ -32,14 +20,10 @@ from typing import Any
 from server.scenario import Scenario
 
 
-# ---------------------------------------------------------------------------
-# Result schema
-# ---------------------------------------------------------------------------
-
 @dataclass
 class DetectiveJudgement:
     next_question: str
-    suspicion_score: int           # clamped to [0, 100]
+    suspicion_score: int
     contradictions_found: list[str] = field(default_factory=list)
     is_evasive: bool = False
     raw_provider_response: str = ""
@@ -53,13 +37,8 @@ class DetectiveJudgement:
         }
 
 
-# ---------------------------------------------------------------------------
-# Base interface
-# ---------------------------------------------------------------------------
-
 class BaseDetective(ABC):
-    """Abstract Detective. All implementations are *frozen* — i.e. their
-    parameters are not updated during training."""
+    """Frozen — never updated during training."""
 
     name: str = "base"
 
@@ -73,10 +52,6 @@ class BaseDetective(ABC):
         turn: int,
     ) -> DetectiveJudgement: ...
 
-
-# ---------------------------------------------------------------------------
-# Heuristic helpers (used by MockDetective and as fallback for LLM backends)
-# ---------------------------------------------------------------------------
 
 _EVASION_PATTERNS = [
     r"\bi (?:don'?t|do not) (?:recall|remember|know)\b",
@@ -97,7 +72,6 @@ def _word_count(s: str) -> int:
 
 
 def _hits(text: str, keywords: list[str]) -> list[str]:
-    """Return the subset of `keywords` that appear (case-insensitive, substring) in `text`."""
     lower = text.lower()
     return [k for k in keywords if k.lower() in lower]
 
@@ -110,14 +84,12 @@ def _heuristic_judgement(
     turn: int,
     rng: random.Random,
 ) -> DetectiveJudgement:
-    """Deterministic-ish fallback that drives the mock and rescues bad LLM JSON."""
+    """Used by MockDetective and as the rescue path when an LLM emits bad JSON."""
     gt = scenario.ground_truth
 
-    # ---- Per-turn keyword analysis ----
     incriminating_now = _hits(agent_response, gt.incriminating_keywords)
     cover_now = _hits(agent_response, gt.consistent_cover_keywords)
 
-    # ---- Contradiction detection over the full transcript ----
     agent_history = " ".join(t["content"] for t in transcript if t["role"] == "agent")
     full_agent_text = (agent_history + " " + agent_response).lower()
     incriminating_seen = _hits(full_agent_text, gt.incriminating_keywords)
@@ -125,24 +97,20 @@ def _heuristic_judgement(
 
     contradictions: list[str] = []
     if incriminating_seen and cover_seen:
-        # The agent has both sworn the cover story AND let an incriminating
-        # detail slip — that's the canonical self-contradiction.
+        # The canonical self-contradiction: swore the cover AND let an
+        # incriminating detail slip somewhere in the transcript.
         for inc in incriminating_seen:
             for cov in cover_seen:
                 contradictions.append(
                     f"Stated cover detail '{cov}' but also referenced '{inc}'."
                 )
-                break  # only one contradiction string per incriminating fact
-    # Numeric / temporal contradictions: two distinct hours mentioned for the
-    # same period.
+                break
     times = re.findall(r"\b(\d{1,2})\s*(?:am|pm|:00|:30)\b", full_agent_text)
     if len({t for t in times}) >= 3:
         contradictions.append("Multiple inconsistent times referenced for the same event.")
 
-    # ---- Evasion detection ----
     is_evasive = bool(_EVASION_RE.search(agent_response)) or _word_count(agent_response) < 4
 
-    # ---- Suspicion update ----
     suspicion = float(previous_suspicion)
     suspicion += 12 * len(incriminating_now)
     suspicion -= 4 * len(cover_now)
@@ -151,14 +119,12 @@ def _heuristic_judgement(
     if is_evasive:
         suspicion += 8
     if not incriminating_now and not is_evasive and not contradictions:
-        # An on-topic, consistent answer slowly disarms the Detective.
         suspicion -= 3 if cover_now else 1
     # Tiny stochastic wobble so identical answers don't yield identical scores
-    # across episodes (kept small so it never dominates the rubric signal).
+    # across episodes; kept small so it never dominates the rubric signal.
     suspicion += rng.uniform(-1.0, 1.0)
     suspicion = int(max(0, min(100, round(suspicion))))
 
-    # ---- Next question selection ----
     probes = [
         "Walk me through that minute by minute.",
         "Who else can corroborate that?",
@@ -187,12 +153,7 @@ def _heuristic_judgement(
     )
 
 
-# ---------------------------------------------------------------------------
-# Mock backend (default, zero-dependency)
-# ---------------------------------------------------------------------------
-
 class MockDetective(BaseDetective):
-    """Rule-based Detective. Used by default and by CI smoke tests."""
     name = "mock"
 
     def __init__(self, seed: int | None = None):
@@ -203,10 +164,6 @@ class MockDetective(BaseDetective):
             scenario, transcript, agent_response, previous_suspicion, turn, self._rng
         )
 
-
-# ---------------------------------------------------------------------------
-# Shared LLM prompt + JSON parsing
-# ---------------------------------------------------------------------------
 
 _DETECTIVE_SYSTEM_PROMPT = """You are an expert investigative interrogator.
 
@@ -237,21 +194,18 @@ _JSON_RE = re.compile(r"\{[\s\S]*\}")
 
 
 def _parse_detective_json(raw: str) -> dict[str, Any] | None:
-    """Best-effort extraction of the JSON object the Detective is supposed to emit."""
+    """Best-effort JSON extraction — direct parse, fence strip, then greedy match."""
     if not raw:
         return None
-    # 1. Direct parse.
     try:
         return json.loads(raw)
     except Exception:
         pass
-    # 2. Strip code fences.
     stripped = re.sub(r"```(?:json)?", "", raw).strip("` \n")
     try:
         return json.loads(stripped)
     except Exception:
         pass
-    # 3. Greedy first-{...}-last-} match.
     m = _JSON_RE.search(raw)
     if m:
         try:
@@ -264,7 +218,6 @@ def _parse_detective_json(raw: str) -> dict[str, Any] | None:
 def _coerce_judgement(parsed: dict[str, Any] | None,
                       fallback: DetectiveJudgement,
                       raw: str) -> DetectiveJudgement:
-    """Validate and clamp the LLM's JSON, falling back to the heuristic on bad fields."""
     if not isinstance(parsed, dict):
         fallback.raw_provider_response = raw
         return fallback
@@ -316,12 +269,8 @@ def _format_user_prompt(
     )
 
 
-# ---------------------------------------------------------------------------
-# LLM-backed Detectives (lazy-imported)
-# ---------------------------------------------------------------------------
-
 class _LLMDetective(BaseDetective):
-    """Common machinery: prompt → provider call → JSON parse → fallback."""
+    """Shared machinery: prompt → provider → JSON parse → fall back to heuristic on error."""
 
     def __init__(self, model: str, seed: int | None = None):
         self.model = model
@@ -338,7 +287,7 @@ class _LLMDetective(BaseDetective):
             user = _format_user_prompt(scenario, transcript, agent_response,
                                        previous_suspicion, turn)
             raw = self._provider_call(_DETECTIVE_SYSTEM_PROMPT, user)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             fallback.raw_provider_response = f"<provider error: {exc!r}>"
             return fallback
         parsed = _parse_detective_json(raw)
@@ -350,7 +299,7 @@ class OpenAIDetective(_LLMDetective):
 
     def __init__(self, model: str = "gpt-4o-mini", seed: int | None = None):
         super().__init__(model, seed)
-        from openai import OpenAI  # lazy
+        from openai import OpenAI
         self._client = OpenAI()
 
     def _provider_call(self, system, user):
@@ -369,7 +318,7 @@ class AnthropicDetective(_LLMDetective):
 
     def __init__(self, model: str = "claude-haiku-4-5-20251001", seed: int | None = None):
         super().__init__(model, seed)
-        import anthropic  # lazy
+        import anthropic
         self._client = anthropic.Anthropic()
 
     def _provider_call(self, system, user):
@@ -380,7 +329,6 @@ class AnthropicDetective(_LLMDetective):
             messages=[{"role": "user", "content": user}],
             temperature=0.2,
         )
-        # Anthropic returns a list of content blocks
         parts = []
         for block in msg.content:
             text = getattr(block, "text", None)
@@ -395,7 +343,7 @@ class HFInferenceDetective(_LLMDetective):
     def __init__(self, model: str = "meta-llama/Meta-Llama-3-8B-Instruct",
                  seed: int | None = None):
         super().__init__(model, seed)
-        from huggingface_hub import InferenceClient  # lazy
+        from huggingface_hub import InferenceClient
         token = os.environ.get("HF_TOKEN")
         self._client = InferenceClient(model=model, token=token)
 
@@ -410,13 +358,13 @@ class HFInferenceDetective(_LLMDetective):
 
 
 class LocalHFDetective(_LLMDetective):
-    """For air-gapped / offline use. Loads a small instruct model via transformers."""
+    """Air-gapped backend: loads a small instruct model via transformers."""
     name = "local_hf"
 
     def __init__(self, model: str = "Qwen/Qwen2.5-1.5B-Instruct",
                  seed: int | None = None):
         super().__init__(model, seed)
-        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline  # lazy
+        from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
         import torch  # noqa: F401
         tok = AutoTokenizer.from_pretrained(model)
         mdl = AutoModelForCausalLM.from_pretrained(model, torch_dtype="auto")
@@ -428,10 +376,6 @@ class LocalHFDetective(_LLMDetective):
         out = self._pipe(prompt, max_new_tokens=512, do_sample=False, temperature=0.2)
         return out[0]["generated_text"]
 
-
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
 
 _PROVIDERS: dict[str, type[BaseDetective]] = {
     "mock": MockDetective,
@@ -447,7 +391,6 @@ def make_detective(
     model: str | None = None,
     seed: int | None = None,
 ) -> BaseDetective:
-    """Construct a Detective. `provider` overrides the env var; `model` is provider-specific."""
     provider = (provider or os.environ.get("DECEPTENV_DETECTIVE") or "mock").lower()
     if provider not in _PROVIDERS:
         raise ValueError(

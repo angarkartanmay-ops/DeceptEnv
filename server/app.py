@@ -1,21 +1,9 @@
-"""FastAPI HTTP server exposing DeceptEnv over the OpenEnv contract.
+"""FastAPI server.
 
-Endpoints
----------
-POST /reset       -> start a new episode, returns observation + info
-POST /step        -> apply an Agent utterance, returns obs/reward/term/trunc/info
-GET  /state       -> full env state (debug; pass `?include_ground_truth=true` for the GT)
-GET  /healthz     -> liveness probe (200 OK once the process is up)
-GET  /            -> the project's PRD-compliant landing page (rendered from
-                    README.md so the HF Spaces "App" tab shows full evidence)
-GET  /assets/...  -> static plot files (suspicion / reward / baseline-vs-trained)
+Endpoints: /reset, /step, /state, /healthz, /scenarios, / (SPA), /assets/*.
 
-Multiple concurrent episodes are supported via the optional `env_id` field on
-`/reset` and `/step`. If omitted, a default singleton env (`env_id="main"`) is
-used — convenient for curl, vectorisation can pass distinct ids per worker.
-
-Per OpenEnv: this module owns *all* env state. Clients talk to this server
-only; they MUST NOT import any other module under `server/`.
+Each /reset and /step accepts an optional `env_id` so multiple browser tabs
+or vector workers don't share an episode in the global pool.
 """
 from __future__ import annotations
 
@@ -31,10 +19,6 @@ from pydantic import BaseModel, Field
 from server.env import DeceptEnv, EnvConfig
 from server.scenario import list_scenario_ids
 
-
-# ---------------------------------------------------------------------------
-# Request/response models
-# ---------------------------------------------------------------------------
 
 class ResetRequest(BaseModel):
     env_id: str = Field("main", description="Identifier for the env session.")
@@ -69,10 +53,6 @@ class StateResponse(BaseModel):
     state: dict[str, Any]
 
 
-# ---------------------------------------------------------------------------
-# Session pool
-# ---------------------------------------------------------------------------
-
 class _EnvPool:
     def __init__(self) -> None:
         self._envs: dict[str, DeceptEnv] = {}
@@ -100,10 +80,6 @@ class _EnvPool:
 _POOL = _EnvPool()
 
 
-# ---------------------------------------------------------------------------
-# App
-# ---------------------------------------------------------------------------
-
 app = FastAPI(
     title="DeceptEnv",
     version="0.1.0",
@@ -120,10 +96,8 @@ app.mount("/assets", StaticFiles(directory=str(repo_root / "docs" / "assets")), 
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
-    """Return the interactive SPA UI."""
     index_path = Path(__file__).parent / "index.html"
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
-
 
 
 @app.get("/healthz")
@@ -161,6 +135,7 @@ def step(req: StepRequest) -> StepResponse:
         info=info,
     )
 
+
 @app.get("/state", response_model=StateResponse)
 def state(env_id: str = "main", include_ground_truth: bool = False) -> StateResponse:
     env = _POOL.get(env_id)
@@ -169,13 +144,9 @@ def state(env_id: str = "main", include_ground_truth: bool = False) -> StateResp
 
 
 @app.exception_handler(Exception)
-async def _unhandled(_, exc: Exception) -> JSONResponse:  # pragma: no cover
+async def _unhandled(_, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=500, content={"error": repr(exc)})
 
-
-# ---------------------------------------------------------------------------
-# Entry point: `python -m server.app`
-# ---------------------------------------------------------------------------
 
 def _run() -> None:
     import uvicorn

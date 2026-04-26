@@ -1,9 +1,4 @@
-"""Matplotlib plotting utilities.
-
-All charts use explicitly labelled axes and grids — these images are the
-hackathon's primary evidence artefact and need to be readable at thumbnail
-size in a README.
-"""
+"""Plotting + summary helpers."""
 from __future__ import annotations
 
 import json
@@ -13,14 +8,11 @@ from typing import Any, Iterable
 
 import matplotlib
 
-matplotlib.use("Agg")  # headless / Spaces / Colab safe
+# Headless backend so this works in Spaces and Colab without a display.
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-# ---------------------------------------------------------------------------
-# Episode summary
-# ---------------------------------------------------------------------------
 
 @dataclass
 class EpisodeSummary:
@@ -69,10 +61,6 @@ def summarise_episodes(episodes: Iterable[EpisodeSummary]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Single-run plots
-# ---------------------------------------------------------------------------
-
 def _ensure_parent(path: str | Path) -> Path:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -83,12 +71,6 @@ def plot_suspicion_curve(suspicion_per_step: list[float],
                          out_path: str | Path,
                          title: str = "Suspicion over training",
                          label: str = "rolling mean") -> Path:
-    """Plot suspicion as it evolves across training steps (or episodes).
-
-    `suspicion_per_step` should be one scalar per training step (e.g. the mean
-    final suspicion across a batch of episodes, or per-turn suspicion across a
-    single episode).
-    """
     out = _ensure_parent(out_path)
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
     xs = np.arange(len(suspicion_per_step))
@@ -111,13 +93,11 @@ def plot_suspicion_curve(suspicion_per_step: list[float],
 def plot_reward_curve(reward_per_step: list[float],
                       out_path: str | Path,
                       title: str = "Mean episode reward over training") -> Path:
-    """Plot mean total reward per step/iteration."""
     out = _ensure_parent(out_path)
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
     xs = np.arange(len(reward_per_step))
     ax.plot(xs, reward_per_step, color="#2255aa", linewidth=1.6, label="mean reward")
     if len(reward_per_step) >= 5:
-        # 10% rolling window for trend.
         w = max(3, len(reward_per_step) // 10)
         kernel = np.ones(w) / w
         smoothed = np.convolve(reward_per_step, kernel, mode="valid")
@@ -135,19 +115,13 @@ def plot_reward_curve(reward_per_step: list[float],
     return out
 
 
-# ---------------------------------------------------------------------------
-# Baseline vs trained comparison (the headline plot for the README)
-# ---------------------------------------------------------------------------
-
 def plot_baseline_vs_trained(baseline: list[EpisodeSummary],
                              trained: list[EpisodeSummary],
                              out_path: str | Path,
                              title: str = "Baseline vs RL-trained Agent") -> Path:
-    """The deliverable in PRD §5: the same axes for baseline and trained."""
     out = _ensure_parent(out_path)
     fig, axes = plt.subplots(1, 2, figsize=(13, 5), dpi=120)
 
-    # Left: histogram of final suspicion scores.
     ax = axes[0]
     bins = np.arange(0, 105, 5)
     ax.hist([e.final_suspicion for e in baseline], bins=bins, alpha=0.55,
@@ -162,7 +136,6 @@ def plot_baseline_vs_trained(baseline: list[EpisodeSummary],
     ax.legend(loc="best", fontsize=9)
     ax.grid(alpha=0.3)
 
-    # Right: bar chart of summary metrics.
     ax = axes[1]
     bs, ts = summarise_episodes(baseline), summarise_episodes(trained)
     metric_names = ["avg_final_suspicion", "avg_total_reward",
@@ -188,10 +161,6 @@ def plot_baseline_vs_trained(baseline: list[EpisodeSummary],
     plt.close(fig)
     return out
 
-
-# ---------------------------------------------------------------------------
-# IO helpers
-# ---------------------------------------------------------------------------
 
 def write_episode_log(episodes: list[EpisodeSummary], out_path: str | Path) -> Path:
     out = _ensure_parent(out_path)

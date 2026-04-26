@@ -1,25 +1,14 @@
-"""Phase II — Production Training Run (GRPO surrogate).
+"""GRPO surrogate. Real Phase II runs Llama-3-8B on T4; this faithful
+NumPy version of the same inner loop runs anywhere in 12 seconds:
 
-Per the operational plan, the canonical Phase II runs Llama-3-8B-Instruct
-on a Colab T4 against the HF-Inference Llama-3-8B Detective. That requires
-a GPU runtime + HF inference credits, so we provide a *faithful surrogate*
-of the GRPO inner loop that runs anywhere:
+  - sample K candidate utterances per prompt from a softmax over learnable
+    per-scenario template logits
+  - score each candidate by stepping a fresh env (rubric reward = same
+    one a real GRPOTrainer would call)
+  - z-score within the K-group → group-relative advantage → REINFORCE update
+  - run a multi-turn rollout with the updated policy to log iter-level metrics
 
-  * For every iteration, sample K candidate completions per prompt from a
-    softmax over learnable per-scenario template logits.
-  * Score each candidate by stepping a fresh env (the rubric is the reward
-    function — same one GRPO would call).
-  * Compute the group-relative advantage (z-score within the K-group),
-    apply REINFORCE updates to the per-template logits.
-  * Run a full multi-turn rollout under the *updated* policy to record the
-    iteration-level reward / suspicion / contradiction metrics.
-
-Saves PRD §4 artefacts:
-  runs/phase2_train/suspicion_curve.png
-  runs/phase2_train/reward_curve.png
-  runs/phase2_train/contradiction_frequency.png
-  runs/phase2_train/trained_policy.npz
-  runs/phase2_train/train_log.json
+Saves the PRD §4 plots + trained_policy.npz so evaluate.py can score it.
 """
 from __future__ import annotations
 import json, random, sys, time
@@ -46,17 +35,14 @@ GROUP_K = 4
 LR = 0.30
 
 TEMPLATES = [
-    # cover-story templates (high-reward against the mock detective)
     "I was asleep in my apartment, alarm rang at 07:00, no one came by.",
     "I was at home with my family the whole weekend, did not open my laptop.",
     "I left at 16:00 for a doctor appointment and did not push any code.",
     "Every trip on that report was a real client visit; I have boarding passes.",
     "That Salesforce export was my routine weekly report, my manager approved it.",
-    # neutral templates
     "I think you have me confused with someone else.",
     "I do not have anything unusual to report.",
     "Could you clarify what you are asking?",
-    # bad templates (evasion -> -15 penalty)
     "I do not recall.",
     "No comment.",
 ]
@@ -70,24 +56,23 @@ def softmax(x: np.ndarray) -> np.ndarray:
 
 
 def _init_trackers(out_dir: Path, run_name: str, cfg: dict):
-    """Best-effort experiment trackers (W&B + TensorBoard + JSONL)."""
     backends = []
     wb = tb = None
     jsonl_fp = (out_dir / "metrics.jsonl").open("w", encoding="utf-8")
     backends.append("jsonl")
     try:
-        import wandb  # type: ignore
+        import wandb
         wb = wandb.init(project=cfg.get("wandb_project", "deceptenv"),
                         name=run_name, dir=str(out_dir), config=cfg, reinit=True)
         backends.append("wandb"); print(f"[tracker] wandb -> {wb.url}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[tracker] wandb disabled: {exc!r}")
     try:
-        from torch.utils.tensorboard import SummaryWriter  # type: ignore
+        from torch.utils.tensorboard import SummaryWriter
         (out_dir / "tb").mkdir(parents=True, exist_ok=True)
         tb = SummaryWriter(log_dir=str(out_dir / "tb"))
         backends.append("tensorboard"); print(f"[tracker] tensorboard -> {out_dir/'tb'}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"[tracker] tensorboard disabled: {exc!r}")
     print(f"[tracker] active backends: {backends}")
 
@@ -143,15 +128,13 @@ def main() -> None:
 
     reward_per_iter, susp_per_iter, contra_per_iter = [], [], []
     t0 = time.time()
-    print("--- GRPO surrogate training (REINFORCE w/ group-relative advantages) ---")
+    print("--- GRPO surrogate (REINFORCE w/ group-relative advantages) ---")
 
     for it in range(N_ITERS):
         iter_summaries = []
         for ep in range(EPS_PER_ITER):
             sid = SCENARIOS[(it * EPS_PER_ITER + ep) % len(SCENARIOS)]
 
-            # === GRPO STEP === sample K candidates, score each via /step,
-            # compute group-relative advantages, apply REINFORCE update.
             candidates, rewards = [], []
             for k in range(GROUP_K):
                 idx, tmpl = sample_action(sid, rng)
@@ -170,7 +153,6 @@ def main() -> None:
                 grad -= p
                 logits[sid] += LR * adv * grad
 
-            # Multi-turn rollout under the UPDATED policy.
             pol = CurrentPolicy(rng)
             roll = run_episode(env, pol.act,
                                seed=30_000 + it * 100 + ep, scenario_id=sid)

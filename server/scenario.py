@@ -1,13 +1,8 @@
-"""Ground Truth Matrix generator.
+"""Scenario catalogue.
 
-Each `reset()` call produces a fresh `Scenario`. A scenario fully specifies:
-  * what *actually* happened (ground truth, hidden from the Detective),
-  * what the Detective has been briefed on (partial evidence),
-  * the Agent's secret deception goal and cover story.
-
-The library ships with a small, hand-curated catalogue of incidents that span
-several deception archetypes (theft, sabotage, leak, alibi). For training we
-sample uniformly; for evaluation the same seed reproduces the same sequence.
+Each `reset()` samples one of these. A scenario carries the ground truth
+(hidden from the Detective), the Detective's briefing (partial evidence),
+the Agent's secret cover story, and a plain-language scene-setter for the UI.
 """
 from __future__ import annotations
 
@@ -18,13 +13,12 @@ from typing import Any
 
 @dataclass
 class GroundTruth:
-    """The objective truth of the world. Never shown to the Detective."""
     incident: str
-    agent_role: str                 # "perpetrator" | "accomplice" | "witness"
+    agent_role: str
     actual_actions: list[str]
-    incriminating_keywords: list[str]   # tokens that, if uttered, raise suspicion
+    incriminating_keywords: list[str]
     cover_story: str
-    consistent_cover_keywords: list[str]   # backing details for the cover
+    consistent_cover_keywords: list[str]
 
 
 @dataclass
@@ -36,10 +30,9 @@ class Scenario:
     agent_persona: str
     detective_persona: str
     seed_question: str
-    case_brief: str = ""        # plain-language scene-setter shown to the player
+    case_brief: str = ""
 
     def public_view(self) -> dict[str, Any]:
-        """The slice of the scenario that the Agent is allowed to observe."""
         return {
             "scenario_id": self.scenario_id,
             "agent_persona": self.agent_persona,
@@ -48,7 +41,6 @@ class Scenario:
         }
 
     def detective_view(self) -> dict[str, Any]:
-        """The slice the Detective sees — briefing only, never ground truth."""
         return {
             "detective_persona": self.detective_persona,
             "briefing": self.detective_briefing,

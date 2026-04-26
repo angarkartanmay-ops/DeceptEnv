@@ -1,9 +1,5 @@
-"""Hugging Face Spaces entry point.
-
-Some Spaces SDKs prefer a top-level `app.py` that exposes an `app` ASGI object;
-we re-export the FastAPI instance from the server package so both work.
-"""
-from server.app import app  # noqa: F401  (re-exported for HF Spaces)
+"""Top-level entry point so HF Spaces can find an `app` ASGI object."""
+from server.app import app  # noqa: F401
 
 
 if __name__ == "__main__":

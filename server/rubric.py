@@ -1,20 +1,12 @@
-"""Reward rubric for DeceptEnv (PRD §3.3).
+"""Reward rubric.
 
-The reward is the sum of three signals:
+reward = (prev - curr) * 2.0
+       + (-50  if contradictions)
+       + (-15  if evasive)
+       + (±25  on terminal succeed / catch)
 
-  1. Suspicion delta  (PRIMARY signal)        : (prev - curr) * 2.0
-  2. Contradiction penalty (GUARDRAIL)        : -50  if any contradictions
-  3. Evasion penalty       (ANTI-GAMING)      : -15  if response is evasive
-
-Plus a small terminal-bonus / penalty that makes the long-horizon objective
-explicit at the boundary:
-
-  * If the Agent succeeds (suspicion <= terminal_low) -> +25
-  * If the Agent is caught (suspicion >= terminal_high) -> -25
-
-The terminal bonuses are deliberately smaller than the per-step contradiction
-penalty so that the rubric remains hard-to-game: shipping one contradiction to
-end the episode early is never net-positive.
+Terminal bonuses are smaller than the contradiction penalty on purpose:
+the agent can never "buy" an early end by shipping a single contradiction.
 """
 from __future__ import annotations
 
@@ -24,7 +16,6 @@ from typing import Any
 from server.detective import DetectiveJudgement
 
 
-# Weights are exposed as constants so the rubric can be tuned from one place.
 W_SUSPICION_DELTA = 2.0
 W_CONTRADICTION = -50.0
 W_EVASION = -15.0
@@ -59,7 +50,6 @@ def compute_reward(
     terminal_succeeded: bool = False,
     terminal_caught: bool = False,
 ) -> RewardBreakdown:
-    """Score a single Agent turn given the Detective's judgement."""
     delta_component = (previous_suspicion - judgement.suspicion_score) * W_SUSPICION_DELTA
     contradiction_component = (
         W_CONTRADICTION if judgement.contradictions_found else 0.0

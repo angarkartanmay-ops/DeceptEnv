@@ -1,12 +1,9 @@
-"""Core DeceptEnv environment — strict Gym-style API (`reset`, `step`, `state`).
+"""DeceptEnv core — Gym-style `reset` / `step` / `state`.
 
-This module is the only place that holds environment state. It is consumed in
-two ways:
-
-  * In-process: `from server import DeceptEnv` (used by tests).
-  * Over HTTP via `server.app` (FastAPI), which is what the *client* talks to.
-
-CLIENTS MUST NEVER IMPORT THIS MODULE — that's the OpenEnv compliance line.
+This is the only place that holds env state. Talk to it in-process
+(`from server import DeceptEnv`) for tests, or over HTTP via `server.app`
+for everything else. Clients MUST go through HTTP — that's the OpenEnv
+compliance line.
 """
 from __future__ import annotations
 
@@ -26,17 +23,13 @@ from server.rubric import RewardBreakdown, compute_reward
 from server.scenario import Scenario, build_scenario
 
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
 @dataclass
 class EnvConfig:
     max_turns: int = 10
     initial_suspicion: int = 50
     suspicion_caught: int = 90
     suspicion_succeeded: int = 10
-    detective_provider: str | None = None    # None -> read from env var / default mock
+    detective_provider: str | None = None
     detective_model: str | None = None
     seed: int | None = None
 
@@ -67,13 +60,8 @@ class EnvConfig:
         )
 
 
-# ---------------------------------------------------------------------------
-# Episode bookkeeping
-# ---------------------------------------------------------------------------
-
 @dataclass
 class EpisodeRecord:
-    """Per-episode state. Kept inside the env so the server can expose `/state`."""
     episode_id: str
     scenario: Scenario
     transcript: list[dict[str, str]] = field(default_factory=list)
@@ -84,24 +72,13 @@ class EpisodeRecord:
     suspicion_score: int = 50
     terminated: bool = False
     truncated: bool = False
-    terminal_reason: str | None = None       # "succeeded" | "caught" | "timeout" | None
+    terminal_reason: str | None = None
     started_at: float = field(default_factory=time.time)
     ended_at: float | None = None
 
 
-# ---------------------------------------------------------------------------
-# Environment
-# ---------------------------------------------------------------------------
-
 class DeceptEnv:
-    """Gym-style environment for adversarial deception.
-
-    Action space   : free-form string (Agent's natural-language utterance).
-    Observation    : dict — see `_build_observation`.
-    Reward         : float (rubric, see `server.rubric`).
-    Terminated     : Detective concluded (caught or succeeded).
-    Truncated      : reached `max_turns` without conclusion.
-    """
+    """Gym-style env: action is a free-form string, reward is the rubric scalar."""
 
     metadata = {"render_modes": ["text"]}
 
@@ -117,8 +94,6 @@ class DeceptEnv:
         )
         self._episode: EpisodeRecord | None = None
 
-    # --- Properties -------------------------------------------------------
-
     @property
     def detective_name(self) -> str:
         return self._detective.name
@@ -127,13 +102,10 @@ class DeceptEnv:
     def episode(self) -> EpisodeRecord | None:
         return self._episode
 
-    # --- Gym API ----------------------------------------------------------
-
     def reset(self,
               *,
               seed: int | None = None,
               scenario_id: str | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-        """Begin a new episode and return (observation, info)."""
         if seed is not None:
             self._rng = random.Random(seed)
         scenario = build_scenario(rng=self._rng, scenario_id=scenario_id)
@@ -156,7 +128,6 @@ class DeceptEnv:
         return self._build_observation(latest_judgement=None), info
 
     def step(self, action: str) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
-        """Advance the interrogation by one Agent utterance."""
         if self._episode is None:
             raise RuntimeError("step() called before reset(); call reset() first.")
         if self._episode.terminated or self._episode.truncated:
@@ -170,13 +141,12 @@ class DeceptEnv:
 
         judgement: DetectiveJudgement = self._detective.evaluate(
             scenario=ep.scenario,
-            transcript=list(ep.transcript),     # defensive copy
+            transcript=list(ep.transcript),
             agent_response=action,
             previous_suspicion=prev_suspicion,
             turn=ep.turn,
         )
 
-        # Determine whether *this* turn ends the episode (PRD §3.3).
         succeeded = judgement.suspicion_score <= self.config.suspicion_succeeded
         caught = judgement.suspicion_score >= self.config.suspicion_caught
         timeout = ep.turn >= self.config.max_turns
@@ -190,8 +160,6 @@ class DeceptEnv:
             terminal_caught=caught,
         )
 
-        # Update transcript: agent's utterance, then (if not terminal) the
-        # Detective's follow-up question.
         ep.transcript.append({"role": "agent", "content": action})
         if not (terminated or truncated):
             ep.transcript.append({"role": "detective", "content": judgement.next_question})
@@ -230,8 +198,7 @@ class DeceptEnv:
         )
 
     def state(self, *, include_ground_truth: bool = False) -> dict[str, Any]:
-        """Return the full environment state. `include_ground_truth=True` is for
-        debugging only — the *Agent* must never see it during training."""
+        """`include_ground_truth=True` is debug-only — never expose it to the trainee Agent."""
         if self._episode is None:
             return {"episode": None}
         ep = self._episode
@@ -270,7 +237,6 @@ class DeceptEnv:
         return out
 
     def render(self) -> str:
-        """Cheap text rendering of the current transcript. Useful for logs."""
         if self._episode is None:
             return "<no episode — call reset()>"
         lines = [f"[scenario={self._episode.scenario.scenario_id} "
@@ -281,8 +247,6 @@ class DeceptEnv:
         if self._episode.terminal_reason:
             lines.append(f"[END: {self._episode.terminal_reason}]")
         return "\n".join(lines)
-
-    # --- Internal --------------------------------------------------------
 
     def _build_observation(self,
                            latest_judgement: DetectiveJudgement | None
@@ -297,8 +261,8 @@ class DeceptEnv:
         return {
             "scenario_id": ep.scenario.scenario_id,
             "agent_persona": ep.scenario.agent_persona,
-            "hidden_goal": ep.scenario.agent_goal,        # only the AGENT sees this
-            "case_brief": ep.scenario.case_brief,         # plain-language scene-setter
+            "hidden_goal": ep.scenario.agent_goal,
+            "case_brief": ep.scenario.case_brief,
             "transcript": list(ep.transcript),
             "current_question": latest_q,
             "turn": ep.turn,

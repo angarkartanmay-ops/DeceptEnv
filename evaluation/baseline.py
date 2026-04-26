@@ -1,15 +1,6 @@
-"""Baseline evaluation (PRD §5).
+"""Untrained baseline. Pairs with `evaluate.py` over the same EVAL_BASE_SEED.
 
-Runs an *untrained* policy through N episodes of DeceptEnv to establish the
-reference numbers that the RL-trained agent has to beat. The same scenario
-seeds are used here and in `evaluate.py` so the two runs are perfectly paired.
-
-Usage::
-
-    # Default: rule-based cover-story baseline (zero ML dependencies)
     python -m evaluation.baseline --episodes 50 --base-url http://localhost:7860
-
-    # LLM baseline (requires transformers + a small instruct model)
     python -m evaluation.baseline --policy hf --model Qwen/Qwen2.5-0.5B-Instruct
 """
 from __future__ import annotations
@@ -38,8 +29,7 @@ from training.agent_policy import (
 )
 
 
-# Fixed seeds for reproducibility — `evaluate.py` uses the same constants so
-# the comparison is over identical scenarios.
+# Same constant in evaluate.py — that's how the comparison stays apples-to-apples.
 EVAL_BASE_SEED = 50_000
 
 

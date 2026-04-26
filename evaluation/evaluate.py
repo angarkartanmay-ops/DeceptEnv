@@ -1,19 +1,11 @@
-"""Post-training evaluation (PRD §5).
+"""Trained-policy evaluation. Re-uses EVAL_BASE_SEED so the comparison
+is over the exact same 50 scenarios `baseline.py` ran.
 
-Loads a LoRA-fine-tuned model (or a base model) and runs it through the SAME
-50 scenarios that `baseline.py` used. Then produces:
-  * `evaluate_episodes.json`         — per-episode log (joins to baseline's)
-  * `aggregate.json`                 — summary metrics
-  * `suspicion_curve.png`            — final suspicion per episode
-  * `baseline_vs_trained.png`        — the headline comparison plot
-
-Usage::
-
-    python -m evaluation.evaluate \
-        --base-url http://localhost:7860 \
-        --model Qwen/Qwen2.5-0.5B-Instruct \
-        --adapter runs/<train_run>/checkpoints/final \
-        --baseline runs/baseline/episodes.json \
+    python -m evaluation.evaluate \\
+        --base-url http://localhost:7860 \\
+        --model Qwen/Qwen2.5-0.5B-Instruct \\
+        --adapter runs/<train_run>/checkpoints/final \\
+        --baseline runs/baseline/episodes.json \\
         --episodes 50
 """
 from __future__ import annotations

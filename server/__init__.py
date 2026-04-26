@@ -1,7 +1,4 @@
-"""DeceptEnv server package — the *isolated* environment engine.
-
-Per OpenEnv compliance, no client / training module may import from here.
-"""
-from server.env import DeceptEnv, EnvConfig  # re-export for in-process use only
+"""Env engine. Clients/trainers must NOT import from here — talk over HTTP."""
+from server.env import DeceptEnv, EnvConfig
 
 __all__ = ["DeceptEnv", "EnvConfig"]

@@ -19,6 +19,6 @@ notebooks/
 .env
 .env.*
 !.env.example
-# Allow docs/assets/ into the image so the landing page can serve the plots.
+# docs/ holds the plots the SPA serves at /assets/*
 !docs/
 !docs/**

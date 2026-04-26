@@ -1,14 +1,8 @@
-"""End-to-end zero-ML demo.
+"""Zero-ML demo. Boots two rule-based policies through the live env and
+emits the headline `baseline_vs_trained.png`. Used to seed the README before
+any GPU run finishes.
 
-Runs the random + cover-story baselines through the live HTTP server (mock
-detective) and emits the headline `baseline_vs_trained.png` artefact, with
-"trained" played by the cover-story policy. Used as the README's reference
-image — once a real RL run finishes, regenerate by pointing
-`evaluation.evaluate` at the LoRA adapter.
-
-Usage::
-
-    python -m server.app &              # in another shell
+    python -m server.app &
     python -m scripts.quickstart_demo --episodes 30 --out-dir runs/demo
 """
 from __future__ import annotations

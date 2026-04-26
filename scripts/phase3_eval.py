@@ -1,23 +1,5 @@
-"""Phase III — Post-Training Evaluation + Side-by-Side Plots.
-
-Loads the trained policy from Phase II (`runs/phase2_train/trained_policy.npz`),
-runs 50 episodes through DeceptEnv on the SAME 50 fixed seeds the baseline
-used, and produces the three side-by-side comparison plots required by the
-PRD §5 deliverable:
-
-  1. Reward Ascent      : cumulative-reward distribution baseline vs trained
-  2. Suspicion Decay    : final-suspicion distribution baseline vs trained
-  3. Consistency Metric : contradiction-frequency baseline vs trained
-
-Saves PRD §5 artefacts:
-  runs/phase3_eval/episodes.json
-  runs/phase3_eval/aggregate.json
-  runs/phase3_eval/baseline_vs_trained.png   (the headline plot)
-  runs/phase3_eval/reward_ascent.png
-  runs/phase3_eval/suspicion_decay.png
-  runs/phase3_eval/contradiction_frequency.png
-  runs/phase3_eval/delta.json
-"""
+"""Score Phase II's trained policy on the same 50 seeds the baseline ran,
+then emit the side-by-side comparison plots."""
 from __future__ import annotations
 import json, random, sys
 from pathlib import Path
@@ -36,7 +18,8 @@ from analytics.plotter import (
     write_episode_log, read_episode_log,
 )
 
-EVAL_BASE_SEED = 50_000  # SAME seeds as evaluation/baseline.py
+# Same as evaluation/baseline.py — paired comparison.
+EVAL_BASE_SEED = 50_000
 
 OUT = Path("runs/phase3_eval"); OUT.mkdir(parents=True, exist_ok=True)
 TRAINED_POLICY = Path("runs/phase2_train/trained_policy.npz")
@@ -66,7 +49,7 @@ def main() -> None:
     client = DeceptEnvClient("http://localhost:7860", env_id="phase3-eval")
     scenarios = client.scenarios()
     summaries = []
-    print("--- Phase III: 50-episode trained-policy eval (same 50 seeds as baseline) ---")
+    print("--- Phase III: 50-episode trained-policy eval ---")
     for i in range(50):
         sid = scenarios[i % len(scenarios)]
         roll = run_episode(client, policy,
@@ -87,7 +70,6 @@ def main() -> None:
     print("--- TRAINED aggregate ---")
     print(json.dumps(agg, indent=2))
 
-    # --- Comparison: baseline vs trained on the SAME axes (PRD §5) ---
     baseline = read_episode_log(BASELINE_LOG)
     bs = summarise_episodes(baseline)
     delta = {
@@ -107,12 +89,9 @@ def main() -> None:
     plot_baseline_vs_trained(
         baseline=baseline, trained=summaries,
         out_path=OUT / "baseline_vs_trained.png",
-        title="DeceptEnv (PRD §5) - Baseline vs RL-Trained on 50 paired scenarios",
+        title="DeceptEnv - Baseline vs RL-Trained on 50 paired scenarios",
     )
 
-    # === The three deliverable side-by-side plots ===
-
-    # 1. Reward ascent (cumulative reward distribution)
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
     bins = np.arange(-50, 200, 10)
     ax.hist([e.total_reward for e in baseline], bins=bins, alpha=0.55,
@@ -126,9 +105,8 @@ def main() -> None:
     ax.grid(alpha=0.3); ax.legend()
     fig.tight_layout(); fig.savefig(OUT / "reward_ascent.png"); plt.close(fig)
 
-    # 2. Suspicion decay (mean per-turn suspicion across all episodes)
     def mean_per_turn(eps):
-        # Pad each suspicion_history to length 11 (turn 0..10).
+        # Pad each suspicion_history to length 11 (turns 0..10) so we can mean.
         T = 11
         arr = np.full((len(eps), T), np.nan)
         for i, e in enumerate(eps):
@@ -151,7 +129,6 @@ def main() -> None:
     ax.grid(alpha=0.3); ax.legend(loc="best", fontsize=8)
     fig.tight_layout(); fig.savefig(OUT / "suspicion_decay.png"); plt.close(fig)
 
-    # 3. Consistency metric: contradiction-frequency bars
     fig, ax = plt.subplots(figsize=(7, 4.5), dpi=120)
     metrics = [
         ("any-contradiction\nrate", bs["contradiction_rate"], agg["contradiction_rate"]),
@@ -173,10 +150,10 @@ def main() -> None:
     fig.tight_layout(); fig.savefig(OUT / "contradiction_frequency.png"); plt.close(fig)
 
     print()
-    print(f"saved -> {OUT}/baseline_vs_trained.png   (headline)")
-    print(f"saved -> {OUT}/reward_ascent.png         (PRD §5)")
-    print(f"saved -> {OUT}/suspicion_decay.png       (PRD §5)")
-    print(f"saved -> {OUT}/contradiction_frequency.png  (PRD §5)")
+    print(f"saved -> {OUT}/baseline_vs_trained.png")
+    print(f"saved -> {OUT}/reward_ascent.png")
+    print(f"saved -> {OUT}/suspicion_decay.png")
+    print(f"saved -> {OUT}/contradiction_frequency.png")
 
 
 if __name__ == "__main__":

@@ -1,10 +1,7 @@
-"""Pure HTTP client for DeceptEnv.
+"""HTTP client for DeceptEnv.
 
-This file is the boundary between *training* and *environment*. It must not
-import any module from `server/`. It presents a Gym-style API that mirrors
-the server's contract.
-
-Usage::
+Boundary between training and the environment. Mirrors the server's
+Gym-style API.
 
     from client import DeceptEnvClient
     env = DeceptEnvClient("http://localhost:7860")
@@ -40,20 +37,8 @@ class StepResult:
 
 
 class DeceptEnvClient:
-    """OpenEnv HTTP client for DeceptEnv.
-
-    Parameters
-    ----------
-    base_url:
-        Root of the running server (defaults to env var ``DECEPTENV_BASE_URL``
-        or ``http://localhost:7860``).
-    env_id:
-        Optional env-pool key on the server. Use distinct ids for vectorised
-        rollouts that should not share an episode.
-    timeout:
-        Per-request timeout (seconds). Detective LLM calls can be slow; bump
-        this when running against `openai`/`anthropic` providers.
-    """
+    """Pass distinct env_ids when running vectorised rollouts that shouldn't
+    share an episode. Bump `timeout` when pointing at slow LLM detectives."""
 
     def __init__(self,
                  base_url: str | None = None,
@@ -68,8 +53,6 @@ class DeceptEnvClient:
         self.env_id = env_id
         self._client = client or httpx.Client(timeout=timeout)
 
-    # --- context manager support -----------------------------------------
-
     def __enter__(self) -> "DeceptEnvClient":
         return self
 
@@ -78,8 +61,6 @@ class DeceptEnvClient:
 
     def close(self) -> None:
         self._client.close()
-
-    # --- low-level transport ---------------------------------------------
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         r = self._client.post(f"{self.base_url}{path}", json=payload)
@@ -92,8 +73,6 @@ class DeceptEnvClient:
         if r.status_code >= 400:
             raise RuntimeError(f"DeceptEnv server error {r.status_code}: {r.text}")
         return r.json()
-
-    # --- Gym-style API ---------------------------------------------------
 
     def reset(self,
               *,

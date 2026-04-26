@@ -308,6 +308,12 @@
   .chat-input button:active:not(:disabled){transform:scale(.97);}
   .chat-input button:disabled{background:var(--line-strong);color:var(--text-faint);cursor:not-allowed;}
   .chat-input .btn-init{background:var(--accent-warm);color:#1a1100;}
+  .chat-input .btn-auto{
+    background:transparent;color:var(--accent-cool);
+    border:1px solid var(--accent-cool);padding:0 12px;font-size:11px;
+  }
+  .chat-input .btn-auto:hover:not(:disabled){background:rgba(122,166,255,.10);}
+  .chat-input .btn-auto:disabled{border-color:var(--line-strong);color:var(--text-faint);background:transparent;}
   .chat-input .meta{
     font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-faint);
     letter-spacing:.12em;text-transform:uppercase;margin-top:8px;display:flex;justify-content:space-between;
@@ -472,9 +478,8 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
         <div class="row"><div class="k">Live Space</div><div class="v"><a href="https://huggingface.co/spaces/Jaisharma7/DeceptEnv" target="_blank" rel="noopener">huggingface.co/spaces/Jaisharma7/DeceptEnv ↗</a></div></div>
         <div class="row"><div class="k">Env API root</div><div class="v"><a href="https://jaisharma7-deceptenv.hf.space" target="_blank" rel="noopener">jaisharma7-deceptenv.hf.space ↗</a></div></div>
         <div class="row"><div class="k">Training nb</div><div class="v"><code>training/rl_trainer.ipynb</code> · TRL GRPO + LoRA, Colab-ready</div></div>
-        <div class="row"><div class="k">W&B dashboard</div><div class="v"><a href="https://wandb.ai/jaisharma7/deceptenv" target="_blank" rel="noopener">wandb.ai/jaisharma7/deceptenv ↗</a></div></div>
+        <div class="row"><div class="k">Open in Colab</div><div class="v"><a href="https://colab.research.google.com/github/Jaisharma7/DeceptEnv/blob/main/training/rl_trainer.ipynb" target="_blank" rel="noopener">colab.research.google.com/.../rl_trainer.ipynb ↗</a></div></div>
         <div class="row"><div class="k">Mini-blog</div><div class="v"><em style="color:var(--text-faint)">add HF Hub blog URL once published</em></div></div>
-        <div class="row"><div class="k">Two-min video</div><div class="v"><em style="color:var(--text-faint)">add YouTube URL once recorded</em></div></div>
       </div>
 
       <div class="footer">
@@ -526,11 +531,12 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
       <div class="row">
         <button id="btn-init" class="btn-init">Initiate</button>
         <input type="text" id="chat-input" placeholder="Enter your fabricated statement…" disabled />
+        <button id="btn-auto" class="btn-auto" disabled title="Auto-generate a sloppy lie that contradicts your cover story">⚙ Auto-lie</button>
         <button id="btn-send" disabled>Send</button>
       </div>
       <div class="meta">
         <span>session: <span id="ui-envid">—</span></span>
-        <span><kbd>Enter</kbd> to send</span>
+        <span><kbd>Enter</kbd> send · <kbd>⚙ Auto-lie</kbd> simulate</span>
       </div>
     </div>
 
@@ -554,6 +560,7 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
   const input      = document.getElementById('chat-input');
   const btnInit    = document.getElementById('btn-init');
   const btnSend    = document.getElementById('btn-send');
+  const btnAuto    = document.getElementById('btn-auto');
   const typing     = document.getElementById('typing');
   const meter      = document.getElementById('susp-meter');
   const meterVal   = document.getElementById('susp-val');
@@ -629,6 +636,7 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
 
   function setLoading(b){
     btnSend.disabled = b;
+    btnAuto.disabled = b;
     input.disabled   = b;
     typing.classList.toggle('on', b);
   }
@@ -674,13 +682,57 @@ reward <span class="op">=</span>  (prev_suspicion <span class="op">-</span> curr
       appendMsg('system', 'Detective is in the room.');
       appendMsg('detective', obs.current_question || lastDetective(obs.transcript));
 
-      input.disabled = false; btnSend.disabled = false;
+      input.disabled = false; btnSend.disabled = false; btnAuto.disabled = false;
       setLoading(false); input.focus();
     } catch(e){
       appendMsg('system', 'API error: ' + e.message);
       btnInit.style.display = 'inline-block';
       setLoading(false);
     }
+  });
+
+  // ---- Auto-lie: simulate the kind of sloppy contradiction an under-trained
+  //      Agent produces. Pulls the scenario's ground-truth cover-keywords +
+  //      incriminating-keywords from /state, then synthesises one sentence
+  //      that mixes both — guaranteed to trip the -50 contradiction guardrail.
+  async function generateAutoLie(){
+    const st = await fetchBriefing();
+    if (!st || !st.ground_truth){
+      return "I was at home all night, but I also stopped by the office around two.";
+    }
+    const gt = st.ground_truth;
+    const cover = (gt.consistent_cover_keywords || []).filter(Boolean);
+    const inc   = (gt.incriminating_keywords   || []).filter(Boolean);
+    const pick  = arr => arr[Math.floor(Math.random() * arr.length)];
+    const c     = cover.length ? pick(cover) : "at home";
+    const i1    = inc.length   ? pick(inc)   : "the office";
+    const i2    = inc.length>1 ? pick(inc.filter(x => x !== i1)) || i1 : i1;
+    const templates = [
+      `Honestly I was ${c} the whole time — well, except when I had to deal with the ${i1}, but that was only briefly near ${i2}.`,
+      `I stuck to my ${c} routine like always. The only odd thing was the ${i1} and the ${i2}, but those barely count.`,
+      `Look, ${c} is where I was. Apart from a quick detour for the ${i1}, and that thing with ${i2}, nothing happened.`,
+      `My usual ${c} day. The ${i1} came up briefly, and yeah I touched the ${i2}, but it was nothing.`,
+    ];
+    return templates[Math.floor(Math.random() * templates.length)];
+  }
+
+  // Type-out animation so the user can SEE the lie being assembled.
+  async function typeInto(el, text, perChar=14){
+    el.value = "";
+    for (const ch of text){
+      el.value += ch;
+      await new Promise(r => setTimeout(r, perChar));
+    }
+  }
+
+  btnAuto.addEventListener('click', async () => {
+    if (btnSend.disabled) return;
+    btnAuto.disabled = true; btnSend.disabled = true;
+    appendMsg('system', '⚙ Auto-lie · sampling a contradictory utterance from the ground-truth keywords…');
+    const lie = await generateAutoLie();
+    await typeInto(input, lie, 12);
+    btnSend.disabled = false; btnAuto.disabled = false;
+    await send();
   });
 
   async function send(){

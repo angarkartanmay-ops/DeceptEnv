@@ -1,8 +1,4 @@
-"""Episode rollout utilities — drive an arbitrary policy through DeceptEnv via HTTP.
-
-The rollout collector returns per-turn transitions (prompt, completion, reward,
-log-prob hooks) plus a per-episode summary. Both training and evaluation reuse it.
-"""
+"""Drive a policy through DeceptEnv and collect per-turn transitions."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -13,13 +9,11 @@ from analytics.plotter import EpisodeSummary
 from training.agent_policy import format_agent_prompt
 
 
-# A policy is just a callable: observation -> action string.
 Policy = Callable[[dict[str, Any]], str]
 
 
 @dataclass
 class Transition:
-    """One (prompt, agent_response, reward) triple from a single env step."""
     episode_id: str
     scenario_id: str
     turn: int
@@ -47,7 +41,6 @@ def run_episode(
     seed: int | None = None,
     scenario_id: str | None = None,
 ) -> EpisodeRollout:
-    """Run one full episode and return summary + per-turn transitions."""
     obs, info = client.reset(seed=seed, scenario_id=scenario_id)
     episode_id = info["episode_id"]
     suspicion_history: list[int] = [obs["suspicion_score"]]
@@ -116,7 +109,6 @@ def run_many(
     scenario_ids: list[str] | None = None,
     progress: Callable[[int, EpisodeRollout], None] | None = None,
 ) -> list[EpisodeRollout]:
-    """Run `n_episodes` episodes. If `scenario_ids` is provided, cycle through them."""
     out: list[EpisodeRollout] = []
     for i in range(n_episodes):
         seed = None if base_seed is None else base_seed + i

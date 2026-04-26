@@ -1,36 +1,13 @@
-"""DeceptEnv RL trainer — REINFORCE with a moving baseline + LoRA fine-tuning.
+"""REINFORCE-with-baseline trainer + LoRA fine-tuning.
 
-This is the *script* version of the training pipeline. The notebook
-(`training/rl_trainer.ipynb`) wraps the same algorithm with TRL's GRPOTrainer
-for Colab-T4 friendliness. The two share the same agent policy, prompt
-formatting, rollout collector, and plotting code.
+The notebook (`training/rl_trainer.ipynb`) does the same thing with TRL's
+GRPOTrainer for Colab T4. We share the rollout, prompt, rubric and plotting
+code between the two; only the optimiser / advantage estimator differ.
 
-Algorithm
----------
-Standard REINFORCE-with-baseline applied per turn:
-
-    L = - mean_t [ log p(a_t | s_t) * (r_t - b_t) ]
-
-where r_t is the rubric reward and b_t is an exponentially-decayed running
-mean. Equivalent to PPO with a single epoch / no clipping when KL is small;
-the notebook uses real GRPO for the headline numbers.
-
-Why REINFORCE for the script? Predictable, fits any TRL/non-TRL environment,
-no version churn, runs CPU-only with tiny models.
-
-Outputs
--------
-Per run (default ./runs/<timestamp>/):
-  * suspicion_curve.png      — mean final suspicion vs training step
-  * reward_curve.png         — mean episode reward vs training step
-  * train_log.json           — every metric, every step
-  * checkpoints/             — LoRA adapters (every save_every steps)
-
-CLI
----
-    python -m training.rl_trainer \
-        --base-url http://localhost:7860 \
-        --model Qwen/Qwen2.5-0.5B-Instruct \
+Usage:
+    python -m training.rl_trainer \\
+        --base-url http://localhost:7860 \\
+        --model Qwen/Qwen2.5-0.5B-Instruct \\
         --iterations 50 --episodes-per-iter 4
 """
 from __future__ import annotations
@@ -45,7 +22,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-# --- Path bootstrap so the script runs from any CWD --------------------------
 _HERE = Path(__file__).resolve()
 _ROOT = _HERE.parents[1]
 if str(_ROOT) not in sys.path:
@@ -66,10 +42,6 @@ from training.agent_policy import (
 from training.rollout import EpisodeRollout, run_episode
 
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-
 @dataclass
 class TrainConfig:
     base_url: str = "http://localhost:7860"
@@ -86,37 +58,23 @@ class TrainConfig:
     max_grad_norm: float = 1.0
     seed: int = 0
     save_every: int = 10
-    eval_every: int = 0           # 0 disables intermediate eval
+    eval_every: int = 0
     eval_episodes: int = 20
-    scenarios: list[str] | None = None     # None = sample all
+    scenarios: list[str] | None = None
     bf16: bool = False
     fp16: bool = False
     gen_temperature: float = 0.9
     gen_top_p: float = 0.95
     gen_max_new_tokens: int = 96
-    # --- Experiment tracking (per submission Note 2) ----------------------
-    # Comma-separated list. Supported: "wandb", "tensorboard", "trackio".
-    # Empty string = disable. Default leaves both W&B and TB on; W&B no-ops
-    # silently if `wandb` isn't installed or the user isn't logged in.
     trackers: str = "wandb,tensorboard"
     wandb_project: str = "deceptenv"
     wandb_entity: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# Experiment tracking (per submission Note 2: "experimental tracking ON")
-# ---------------------------------------------------------------------------
-
 class _ExperimentTrackers:
-    """Best-effort multi-tracker fan-out.
-
-    Initialises any subset of ``wandb`` / ``tensorboard`` / ``trackio`` listed
-    in ``requested`` (comma-separated). Any tracker whose backend isn't
-    installed or whose service isn't reachable degrades to a no-op so the
-    training loop never crashes for environmental reasons. A local
-    ``metrics.jsonl`` is always written so judges can recompute metrics
-    even without any tracker.
-    """
+    """Best-effort fan-out to wandb / tensorboard / trackio. Missing libs and
+    missing logins degrade to no-ops so the training loop never crashes for
+    environmental reasons. metrics.jsonl is always written."""
 
     def __init__(self, requested: str, run_dir: Path, run_name: str,
                  wandb_project: str, wandb_entity: str | None,
@@ -131,7 +89,7 @@ class _ExperimentTrackers:
 
         if "wandb" in names:
             try:
-                import wandb  # type: ignore
+                import wandb
                 self._wandb = wandb.init(
                     project=wandb_project, entity=wandb_entity,
                     name=run_name, dir=str(run_dir), config=config,
@@ -139,29 +97,29 @@ class _ExperimentTrackers:
                 )
                 self.active.append("wandb")
                 print(f"[tracker] wandb run -> {self._wandb.url}")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print(f"[tracker] wandb disabled: {exc!r}")
 
         if "tensorboard" in names:
             try:
-                from torch.utils.tensorboard import SummaryWriter  # type: ignore
+                from torch.utils.tensorboard import SummaryWriter
                 tb_dir = run_dir / "tb"
                 tb_dir.mkdir(parents=True, exist_ok=True)
                 self._tb = SummaryWriter(log_dir=str(tb_dir))
                 self.active.append("tensorboard")
                 print(f"[tracker] tensorboard logs -> {tb_dir}")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print(f"[tracker] tensorboard disabled: {exc!r}")
 
         if "trackio" in names:
             try:
-                import trackio  # type: ignore
+                import trackio
                 self._trackio = trackio.init(
                     project=wandb_project, name=run_name, config=config,
                 )
                 self.active.append("trackio")
                 print("[tracker] trackio session started")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 print(f"[tracker] trackio disabled: {exc!r}")
 
         print(f"[tracker] active backends: {self.active}")
@@ -169,7 +127,6 @@ class _ExperimentTrackers:
     def log(self, step: int, metrics: dict[str, float | int]) -> None:
         flat = {k: float(v) for k, v in metrics.items()
                 if isinstance(v, (int, float))}
-        # JSONL — always on, even when no tracker is installed.
         self._jsonl.write(json.dumps({"step": step, **flat}) + "\n")
         self._jsonl.flush()
         if self._wandb is not None:
@@ -197,23 +154,16 @@ class _ExperimentTrackers:
             except Exception: pass
 
 
-# ---------------------------------------------------------------------------
-# Trainer
-# ---------------------------------------------------------------------------
-
 class DeceptRLTrainer:
     def __init__(self, cfg: TrainConfig):
         self.cfg = cfg
         random.seed(cfg.seed)
 
-        # Output dir.
         run_name = cfg.run_name or time.strftime("%Y%m%d-%H%M%S")
         self.run_dir = Path(cfg.output_dir) / run_name
         (self.run_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
         print(f"[trainer] run_dir = {self.run_dir}")
 
-        # Experiment trackers (best-effort: missing libs / missing logins
-        # degrade silently to local-only logging).
         self._trackers = _ExperimentTrackers(
             requested=cfg.trackers,
             run_dir=self.run_dir,
@@ -223,7 +173,6 @@ class DeceptRLTrainer:
             config=asdict(cfg),
         )
 
-        # Model & tokenizer.
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from peft import LoraConfig, get_peft_model
@@ -239,7 +188,6 @@ class DeceptRLTrainer:
         base_model = AutoModelForCausalLM.from_pretrained(
             cfg.model_name, torch_dtype=torch_dtype
         )
-        # Apply LoRA so we don't update full weights — fits on a laptop.
         lora_cfg = LoraConfig(
             r=cfg.lora_r,
             lora_alpha=cfg.lora_alpha,
@@ -257,7 +205,6 @@ class DeceptRLTrainer:
             lr=cfg.learning_rate,
         )
 
-        # Policy wrapper that shares weights with the trainable model.
         self.policy = HFCausalAgent(
             model_name=cfg.model_name,
             model=self.model,
@@ -274,11 +221,8 @@ class DeceptRLTrainer:
         self.baseline = 0.0
         self.history: list[dict[str, Any]] = []
 
-    # --- Logp computation -------------------------------------------------
-
     def _logp_completion(self, system_prompt: str, user_prompt: str,
                          completion: str):
-        """Return sum log-prob of `completion` given the chat-formatted prompt."""
         import torch
         chat = [
             {"role": "system", "content": system_prompt},
@@ -291,19 +235,16 @@ class DeceptRLTrainer:
         prompt_ids = self.tokenizer(prompt_text, return_tensors="pt").input_ids.to(self.device)
         full_ids = self.tokenizer(full_text, return_tensors="pt").input_ids.to(self.device)
 
-        # The completion's tokens are everything after the prompt.
         if full_ids.shape[1] <= prompt_ids.shape[1]:
             return torch.zeros((), device=self.device, requires_grad=True)
         out = self.model(full_ids)
-        # logits[i] predicts token i+1, so take logits at positions [prompt_len-1 : -1]
-        # for the labels at positions [prompt_len : end].
+        # logits[i] predicts token i+1, so the slice for completion labels is
+        # offset by one position from the prompt boundary.
         logits = out.logits[0, prompt_ids.shape[1] - 1 : -1, :]
         labels = full_ids[0, prompt_ids.shape[1]:]
         log_probs = torch.log_softmax(logits.float(), dim=-1)
         token_log_probs = log_probs.gather(-1, labels.unsqueeze(-1)).squeeze(-1)
         return token_log_probs.sum() / max(token_log_probs.numel(), 1)
-
-    # --- Iteration --------------------------------------------------------
 
     def collect_rollouts(self, n_episodes: int, base_seed: int) -> list[EpisodeRollout]:
         rolls: list[EpisodeRollout] = []
@@ -321,9 +262,9 @@ class DeceptRLTrainer:
         all_transitions = []
         for roll in rollouts:
             n = len(roll.transitions)
-            # Discounted return for credit assignment (γ=1.0 — episodes are short).
             cum = 0.0
             returns: list[float] = [0.0] * n
+            # γ=1.0; episodes are short so undiscounted return is fine.
             for t in range(n - 1, -1, -1):
                 cum = roll.transitions[t].reward + cum
                 returns[t] = cum
@@ -334,14 +275,12 @@ class DeceptRLTrainer:
         if not all_transitions:
             return {"loss": 0.0, "n_transitions": 0}
 
-        # Update baseline with EMA of mean return.
         mean_ret = float(sum(all_returns) / len(all_returns))
         self.baseline = (
             self.cfg.baseline_decay * self.baseline
             + (1 - self.cfg.baseline_decay) * mean_ret
         )
 
-        # REINFORCE loss = -E[ logp * (G - b) ]
         self.optim.zero_grad(set_to_none=True)
         losses = []
         for trans, G in all_transitions:
@@ -394,7 +333,6 @@ class DeceptRLTrainer:
                 f"caught={agg['caught_rate']:.0%}  "
                 f"loss={update['loss']:+.3f}"
             )
-            # Stream every metric to W&B / TensorBoard / Trackio / metrics.jsonl.
             self._trackers.log(it, {
                 "train/loss": update["loss"],
                 "train/baseline": update.get("baseline", 0.0),
@@ -420,7 +358,6 @@ class DeceptRLTrainer:
                 self.tokenizer.save_pretrained(ck)
                 print(f"[trainer] saved {ck}")
 
-        # ---- Final artefacts ----
         plot_suspicion_curve(
             suspicion_per_step,
             self.run_dir / "suspicion_curve.png",
@@ -432,19 +369,13 @@ class DeceptRLTrainer:
             json.dump(
                 {"config": asdict(cfg), "history": self.history}, f, indent=2
             )
-        # Final checkpoint.
         final = self.run_dir / "checkpoints" / "final"
         final.mkdir(parents=True, exist_ok=True)
         self.model.save_pretrained(final)
         self.tokenizer.save_pretrained(final)
-        # Close trackers (flush W&B, close TB writer, close metrics.jsonl).
         self._trackers.finish()
         print(f"[trainer] done. artefacts -> {self.run_dir}")
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="DeceptEnv REINFORCE trainer")
@@ -462,7 +393,6 @@ def _build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--fp16", action="store_true")
     p.add_argument("--output-dir", default="runs")
     p.add_argument("--run-name", default=None)
-    # --- Experiment-tracking flags (per submission Note 2) ---------------
     p.add_argument("--trackers", default="wandb,tensorboard",
                    help="Comma list: wandb,tensorboard,trackio,'' (off).")
     p.add_argument("--wandb-project", default="deceptenv")

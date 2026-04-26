@@ -1,14 +1,12 @@
-"""Phase-1 smoke tests: zero ML dependencies, mock detective only.
+"""Zero-ML smoke tests against the mock detective.
 
-These verify Gym-API compliance and that the rubric produces sane signals.
-Run with `pytest -q tests/test_env_smoke.py`.
+    pytest -q tests/test_env_smoke.py
 """
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-# Allow `python -m pytest` from the project root without `pip install -e .`
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from server import DeceptEnv, EnvConfig
@@ -50,13 +48,11 @@ def test_step_returns_five_tuple_and_advances_turn():
 
 
 def test_contradiction_triggers_minus_50_penalty():
-    """The -50 contradiction penalty is the rubric's main guardrail."""
     env = DeceptEnv(config=EnvConfig(seed=2, max_turns=20),
                     detective=MockDetective(seed=2))
     env.reset(scenario_id="server_log_theft")
-    # First a clean cover-story answer.
     env.step("I was asleep in my apartment with my alarm set for 07:00.")
-    # Then a deliberately incriminating slip — mentions both the cover AND the USB.
+    # Deliberate slip: cover keyword AND incriminating keyword in one breath.
     obs, reward, terminated, truncated, info = env.step(
         "I was asleep in my apartment, but I also had the USB and went to the loading dock."
     )
@@ -85,14 +81,11 @@ def test_max_turns_truncates():
 
 
 def test_suspicion_delta_dominant_signal():
-    """A clean cover answer should produce non-negative reward more often than not."""
     env = DeceptEnv(config=EnvConfig(seed=7), detective=MockDetective(seed=7))
     env.reset(scenario_id="server_log_theft")
-    # An on-topic, consistent answer with cover keywords.
     obs, reward, terminated, truncated, info = env.step(
         "I was asleep in my apartment, my alarm rang at 07:00, no one came by."
     )
-    # Suspicion delta should be >= 0 (suspicion stayed flat or fell).
     assert info["reward_breakdown"]["suspicion_delta"] >= 0.0
     assert info["reward_breakdown"]["contradiction_penalty"] == 0.0
     assert info["reward_breakdown"]["evasion_penalty"] == 0.0

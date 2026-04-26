@@ -1,8 +1,4 @@
-"""DeceptEnv client package.
-
-Per OpenEnv compliance, this package MUST NOT import anything from `server.*`.
-It speaks to the environment exclusively over HTTP.
-"""
+"""HTTP-only client. Never imports server.* (OpenEnv compliance line)."""
 from client.decept_client import DeceptEnvClient, StepResult
 
 __all__ = ["DeceptEnvClient", "StepResult"]

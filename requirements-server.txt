@@ -1,13 +1,11 @@
-# Minimal deps for running JUST the DeceptEnv server (used by the Docker image
-# and Hugging Face Spaces). The training / evaluation pipelines live in the
-# main `requirements.txt` and run OUTSIDE the Space.
+# Server-only deps for the Docker image. Training/eval deps are in
+# requirements.txt and run outside the Space.
 
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.7.0
 
-# Optional LLM-detective backends — installing them keeps the Space ready for
-# any provider; remove the unused ones to shrink the image.
+# Optional LLM-detective backends; safe to drop unused ones to shrink the image.
 openai>=1.40.0
 anthropic>=0.34.0
 huggingface_hub>=0.24.0

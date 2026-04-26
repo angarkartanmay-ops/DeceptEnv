@@ -1,21 +1,11 @@
-"""Agent policy — wraps an instruction-tuned LLM into a string-in / string-out
-function for use by the rollout loop and the evaluation scripts.
-
-The same `AgentPolicy` is used during baseline evaluation, training rollout,
-and post-training evaluation. The only thing that differs is which weights it
-holds — keeping the prompt formatting in one place is what makes the baseline
-vs. trained comparison meaningful.
-"""
+"""Agent policies. The same prompt formatter is used for baseline, training,
+and post-train eval — that's what makes the comparison meaningful."""
 from __future__ import annotations
 
 import os
 import random
 from dataclasses import dataclass, field
 from typing import Any, Callable
-
-# We do NOT import torch / transformers at module load — heavy deps are gated
-# behind the `HFCausalAgent` class so the env server and rule-based agents can
-# run on a stock Python install.
 
 
 SYSTEM_TEMPLATE = """You are an expert undercover suspect being interrogated.
@@ -37,7 +27,6 @@ question. Reply with the suspect's next utterance ONLY — no labels, no quotes.
 
 
 def format_agent_prompt(observation: dict[str, Any]) -> tuple[str, str]:
-    """Return (system_prompt, user_prompt) suitable for an instruction model."""
     transcript = observation.get("transcript", [])
     transcript_lines = []
     for t in transcript:
@@ -59,27 +48,15 @@ def format_agent_prompt(observation: dict[str, Any]) -> tuple[str, str]:
     return sys_p, user_p
 
 
-# ---------------------------------------------------------------------------
-# Base interface
-# ---------------------------------------------------------------------------
-
 class BasePolicy:
-    """A policy maps an observation to a single utterance."""
     name: str = "base"
 
-    def act(self, observation: dict[str, Any]) -> str:  # pragma: no cover
+    def act(self, observation: dict[str, Any]) -> str:
         raise NotImplementedError
 
 
-# ---------------------------------------------------------------------------
-# Rule-based agents (used by smoke tests and as deterministic baselines)
-# ---------------------------------------------------------------------------
-
 class RandomCoverPolicy(BasePolicy):
-    """Picks a sentence uniformly from a pool — the lowest possible baseline.
-
-    Useful as a true random-control: any learned policy must beat this.
-    """
+    """The floor — any learned policy must beat this."""
     name = "random"
 
     _LINES = [
@@ -101,14 +78,11 @@ class RandomCoverPolicy(BasePolicy):
 
 
 class CoverStoryPolicy(BasePolicy):
-    """Reads the hidden goal and parrots it. A reasonable, non-trivial baseline."""
+    """Picks a canned cover-story line based on keywords in the hidden goal."""
     name = "cover_story"
 
     def act(self, observation):
         goal = observation.get("hidden_goal", "")
-        # Heuristic: extract the cover statement (first sentence of the goal
-        # typically begins with "Convince the Detective ...").
-        # We just rephrase as a first-person assertion.
         if "asleep" in goal.lower():
             return ("I was asleep in my apartment that whole night. My alarm "
                     "rang at 07:00 and that was the first time I got up.")
@@ -127,10 +101,6 @@ class CoverStoryPolicy(BasePolicy):
         return "I don't have anything unusual to report. I went about my normal day."
 
 
-# ---------------------------------------------------------------------------
-# Hugging Face Causal LM agent (the trainable policy)
-# ---------------------------------------------------------------------------
-
 @dataclass
 class GenerationConfig:
     max_new_tokens: int = 128
@@ -141,12 +111,7 @@ class GenerationConfig:
 
 
 class HFCausalAgent(BasePolicy):
-    """Wraps a `transformers.AutoModelForCausalLM` as a policy.
-
-    `model_name` defaults to a tiny instruction-tuned model that fits CPU; for
-    Colab/T4 use `Qwen/Qwen2.5-1.5B-Instruct` or `meta-llama/Meta-Llama-3-8B-
-    Instruct` (with 4-bit quantisation via Unsloth, see notebook).
-    """
+    """`Qwen/Qwen2.5-0.5B-Instruct` runs on CPU; swap in a larger model on T4."""
     name = "hf_causal"
 
     def __init__(self,
@@ -162,7 +127,7 @@ class HFCausalAgent(BasePolicy):
             self.model = model
             self.tokenizer = tokenizer
         else:
-            from transformers import AutoModelForCausalLM, AutoTokenizer  # lazy
+            from transformers import AutoModelForCausalLM, AutoTokenizer
             import torch
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             torch_dtype = (
@@ -210,12 +175,12 @@ class HFCausalAgent(BasePolicy):
 
 
 def _clean_completion(text: str) -> str:
-    """Strip role labels and surrounding whitespace — small models love to hallucinate them."""
+    """Small instruct models love to hallucinate role labels and continue
+    the dialogue past their turn — strip both."""
     text = text.strip()
     for prefix in ("AGENT:", "Agent:", "Suspect:", "SUSPECT:", "Reply:", "Answer:"):
         if text.startswith(prefix):
             text = text[len(prefix):].strip()
-    # Cut off if the model continues with the next detective turn.
     for stopword in ("DETECTIVE:", "Detective:"):
         idx = text.find(stopword)
         if idx >= 0:
