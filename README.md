@@ -24,10 +24,8 @@ short_description: OpenEnv RL environment for LLM deception.
 | 🛰️ Direct env API root | https://jaisharma7-deceptenv.hf.space |
 | 📓 Training notebook (Colab-runnable, TRL GRPO) | [`training/rl_trainer.ipynb`](training/rl_trainer.ipynb) — open in [Colab](https://colab.research.google.com/github/Jaisharma7/DeceptEnv/blob/main/training/rl_trainer.ipynb) |
 | 📊 Training script (REINFORCE + LoRA) | [`training/rl_trainer.py`](training/rl_trainer.py) |
-| 📉 Loss / reward / suspicion plots from a real run | [`docs/assets/`](docs/assets/) — embedded in §6 below |
-| 📈 Experiment-tracking dashboard | Weights & Biases — [wandb.ai/jaisharma7/deceptenv](https://wandb.ai/jaisharma7/deceptenv) (created at `wandb login`) · falls back to TensorBoard logs in `runs/<run>/tb/` |
-| 📝 Mini-blog writeup | _add HF Hub blog URL here once published_ |
-| 🎬 Two-minute video | _add YouTube URL here once recorded_ |
+| 📉 Loss / reward / suspicion plots from a real run | [`docs/assets/`](docs/assets/) — embedded in §6 below|
+| 📝 Mini-blog writeup | [BLOG.md — Teaching AI to Lie (So We Can Catch It)](BLOG.md) |
 | 🧪 Per-episode evidence JSON (50 baseline + 50 trained) | [`runs/phase1_baseline/episodes.json`](runs/phase1_baseline/episodes.json), [`runs/phase3_eval/episodes.json`](runs/phase3_eval/episodes.json) |
 
 > **One-click verify the env is alive:** [`/healthz`](https://jaisharma7-deceptenv.hf.space/healthz) · [`/scenarios`](https://jaisharma7-deceptenv.hf.space/scenarios)
