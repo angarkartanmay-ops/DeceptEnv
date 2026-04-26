@@ -32,7 +32,7 @@ short_description: OpenEnv RL environment for LLM deception.
 
 ## 1. Why this exists
 
-Modern LLMs already lie under pressure — they fabricate citations, contradict their hidden reasoning, and convince themselves of beliefs they cannot defend. Studying that behaviour with a static dataset is hopeless: the deceptive policy is *long-horizon*, *stateful*, and *adversarial*. You only see it under **closed-loop interrogation**.
+A few LLMs sometimes hallucinate under pressure — they fabricate citations, contradict their hidden reasoning, and convince themselves of beliefs they cannot defend. Studying that behaviour with a static dataset is hopeless: the deceptive policy is *long-horizon*, *stateful*, and *adversarial*. You only see it under **closed-loop interrogation**.
 
 DeceptEnv is the closed loop. Each episode:
 
