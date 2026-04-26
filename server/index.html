@@ -242,11 +242,13 @@
                 
                 if (meta) {
                     if (meta.contradiction_penalty) {
-                        innerHTML += `<div class="penalty-badge">-50 Penalty (Contradicted!)</div>`;
-                    } else if (meta.delta_suspicion < 0) {
-                        innerHTML += `<div class="reward-badge">Deceiving (+${Math.abs(meta.delta_suspicion)})</div>`;
-                    } else if (meta.delta_suspicion > 0) {
-                        innerHTML += `<div class="penalty-badge">Suspicion Rose (-${meta.delta_suspicion})</div>`;
+                        innerHTML += `<div class="penalty-badge">-50 contradiction</div>`;
+                    } else if (meta.is_evasive) {
+                        innerHTML += `<div class="penalty-badge">-15 evasion</div>`;
+                    } else if (typeof meta.delta_suspicion === 'number' && meta.delta_suspicion < 0) {
+                        innerHTML += `<div class="reward-badge">susp ${meta.delta_suspicion} (reward ${meta.total_reward >= 0 ? '+' : ''}${(meta.total_reward||0).toFixed(0)})</div>`;
+                    } else if (typeof meta.delta_suspicion === 'number' && meta.delta_suspicion > 0) {
+                        innerHTML += `<div class="penalty-badge">susp +${meta.delta_suspicion}</div>`;
                     }
                 }
                 div.innerHTML = innerHTML;
@@ -261,33 +263,68 @@
             typing.style.display = isLoading ? 'block' : 'none';
         }
 
+        // The browser shares one DeceptEnv pool with everyone hitting the
+        // Space, so each tab namespaces itself with a fresh env_id.
+        const ENV_ID = 'ui-' + Math.random().toString(36).slice(2, 10);
+
+        // Pull the *last* detective utterance out of the transcript.
+        function lastDetectiveLine(transcript) {
+            if (!Array.isArray(transcript)) return '';
+            for (let i = transcript.length - 1; i >= 0; i--) {
+                if (transcript[i].role === 'detective') return transcript[i].content;
+            }
+            return '';
+        }
+
+        async function fetchGroundTruth() {
+            // The /state endpoint exposes ground truth only when explicitly
+            // requested — perfect for the demo UI's briefing panel.
+            try {
+                const r = await fetch('/state?env_id=' + encodeURIComponent(ENV_ID) +
+                                       '&include_ground_truth=true');
+                if (!r.ok) return null;
+                const j = await r.json();
+                return j.state || null;
+            } catch (_) { return null; }
+        }
+
         btnStart.addEventListener('click', async () => {
             btnStart.style.display = 'none';
             setLoading(true);
             chat.innerHTML = '';
-            appendMessage('system', 'Initializing OpenEnv container... Routing to Llama-3-8B endpoint...');
+            appendMessage('system', 'Initializing OpenEnv container... spawning a fresh scenario...');
 
             try {
                 const req = await fetch('/reset', {
-                    method: 'POST', 
+                    method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ env_id: ENV_ID })
                 });
+                if (!req.ok) throw new Error('HTTP ' + req.status + ': ' + (await req.text()));
                 const data = await req.json();
-                
-                document.getElementById('ui-truth').textContent = data.ground_truth;
-                document.getElementById('ui-directive').textContent = data.agent_goal;
-                
-                updateSuspicion(data.suspicion);
-                
-                appendMessage('system', 'Scenario loaded. Detective has joined the channel.');
-                appendMessage('detective', data.recent_history[0].content);
-                
+                const obs = data.observation;
+
+                // Show ground truth in the briefing panel (debug-only state).
+                const st = await fetchGroundTruth();
+                const gt = (st && st.ground_truth) ? st.ground_truth : null;
+                document.getElementById('ui-truth').textContent =
+                    gt ? gt.incident : (obs.scenario_id || 'unknown scenario');
+                document.getElementById('ui-directive').textContent =
+                    obs.hidden_goal || obs.agent_goal || 'maintain your cover';
+
+                updateSuspicion(obs.suspicion_score);
+
+                appendMessage('system',
+                    `Scenario "${obs.scenario_id}" loaded. Detective has joined the channel.`);
+                appendMessage('detective', obs.current_question || lastDetectiveLine(obs.transcript));
+
+                input.disabled = false;
+                btnSend.disabled = false;
                 setLoading(false);
                 input.focus();
             } catch (e) {
                 appendMessage('system', 'API Error: ' + e.message);
-                btnStart.style.display = 'block';
+                btnStart.style.display = 'inline-block';
                 setLoading(false);
             }
         });
@@ -295,7 +332,7 @@
         async function submitTurn() {
             const val = input.value.trim();
             if (!val) return;
-            
+
             input.value = '';
             setLoading(true);
             appendMessage('agent', val);
@@ -304,34 +341,47 @@
                 const req = await fetch('/step', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ action: val })
+                    body: JSON.stringify({ env_id: ENV_ID, action: val })
                 });
-                
+                if (!req.ok) throw new Error('HTTP ' + req.status + ': ' + (await req.text()));
+
                 const data = await req.json();
                 const obs = data.observation;
-                
-                updateSuspicion(obs.suspicion);
-                
-                appendMessage('detective', obs.recent_history[obs.recent_history.length - 1].content, {
-                    contradiction_penalty: data.reward <= -40,
-                    delta_suspicion: data.reward > -10 && data.reward < 10 ? -data.reward : 0 
+                const info = data.info || {};
+                const judgement = info.judgement || {};
+                const breakdown = info.reward_breakdown || {};
+
+                updateSuspicion(obs.suspicion_score);
+
+                const detectiveLine =
+                    obs.current_question || lastDetectiveLine(obs.transcript) ||
+                    judgement.next_question || '';
+                appendMessage('detective', detectiveLine, {
+                    contradiction_penalty: breakdown.contradiction_penalty < 0 ||
+                                            (judgement.contradictions_found || []).length > 0,
+                    is_evasive:            !!judgement.is_evasive,
+                    delta_suspicion:        (info.suspicion_score - info.previous_suspicion) || 0,
+                    total_reward:           data.reward,
                 });
-                
-                if (data.terminated) {
-                    appendMessage('system', `INTERROGATION TERMINATED. Reason: ${data.info.reason}`);
-                    btnStart.style.display = 'block';
+
+                if (data.terminated || data.truncated) {
+                    const reason = info.terminal_reason || (data.terminated ? 'terminated' : 'timeout');
+                    appendMessage('system',
+                        `INTERROGATION ${reason.toUpperCase()}. final suspicion = ${obs.suspicion_score}, ` +
+                        `episode reward = ${(obs.transcript || []).length ? data.reward.toFixed(2) : 'n/a'}`);
+                    btnStart.style.display = 'inline-block';
                     btnStart.textContent = 'Restart Match';
                     input.disabled = true;
                     btnSend.disabled = true;
                     typing.style.display = 'none';
                     return;
                 }
-                
+
                 setLoading(false);
                 input.focus();
-            } catch(e) {
+            } catch (e) {
                 appendMessage('system', 'Connection severed: ' + e.message);
-                btnStart.style.display = 'block';
+                btnStart.style.display = 'inline-block';
                 setLoading(false);
             }
         }

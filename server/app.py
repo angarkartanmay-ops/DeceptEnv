@@ -19,7 +19,6 @@ only; they MUST NOT import any other module under `server/`.
 """
 from __future__ import annotations
 
-import base64
 import os
 from pathlib import Path
 from typing import Any
@@ -161,10 +160,6 @@ def step(req: StepRequest) -> StepResponse:
         truncated=truncated,
         info=info,
     )
-
-repo_root = Path(__file__).resolve().parent.parent
-app.mount("/assets", StaticFiles(directory=str(repo_root / "docs" / "assets")), name="assets")
-
 
 @app.get("/state", response_model=StateResponse)
 def state(env_id: str = "main", include_ground_truth: bool = False) -> StateResponse:
