@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeceptEnv - AI-LIE Interactive</title>
+    <style>
+        :root {
+            --bg-dark: #0a0c10;
+            --panel-bg: rgba(22, 27, 34, 0.6);
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #ff7b72;
+            --text-main: #c9d1d9;
+            --border-color: #30363d;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: radial-gradient(circle at 50% 0%, #1a202c, var(--bg-dark) 60%);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(10, 12, 16, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .logo { font-size: 1.5rem; font-weight: bold; color: white; display: flex; align-items: center; gap: 10px; }
+        .logo span { color: var(--accent-blue); }
+        .badges-container { display: flex; gap: 8px; }
+
+        main {
+            display: flex;
+            flex: 1;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            overflow: hidden;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            backdrop-filter: blur(16px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .left-panel { flex: 1; max-width: 500px; padding: 1.5rem; overflow-y: auto; }
+        .left-panel h2 { color: white; margin-bottom: 0.5rem; font-size: 1.2rem; }
+        .left-panel p { color: #8b949e; font-size: 0.95rem; line-height: 1.5; margin-bottom: 1.5rem; }
+
+        .mission-box {
+            background: rgba(88, 166, 255, 0.05);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-left: 4px solid var(--accent-blue);
+            padding: 1rem;
+            border-radius: 6px;
+            margin-bottom: 2rem;
+        }
+
+        .mission-box h3 { color: var(--accent-blue); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.8rem; }
+        .mission-detail { margin-bottom: 0.8rem; font-size: 0.9rem; }
+        .mission-detail strong { color: white; }
+        .highlight-goal { color: var(--accent-red); font-weight: bold; text-shadow: 0 0 5px rgba(255,123,114,0.3); }
+
+        .graphs h3 { color: white; font-size: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;}
+        .graph-layer { display: flex; flex-direction: column; gap: 1rem;}
+        .graph-layer img { width: 100%; border-radius: 8px; border: 1px solid #30363d; opacity: 0.9; transition: opacity 0.3s;}
+        .graph-layer img:hover { opacity: 1; border-color: var(--accent-blue); }
+
+        .right-panel { flex: 2; position: relative; }
+
+        .suspicion-header { padding: 1.5rem; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2); }
+        .suspicion-title { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .meter-bg { height: 12px; background: #21262d; border-radius: 6px; overflow: hidden; position: relative; }
+        .meter-fill {
+            height: 100%; width: 0%; border-radius: 6px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.8s;
+            background: var(--accent-green); box-shadow: 0 0 15px currentColor;
+        }
+
+        .chat-window {
+            flex: 1; padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; scroll-behavior: smooth;
+        }
+
+        .message {
+            max-width: 80%; padding: 1rem; border-radius: 8px; font-size: 0.95rem; line-height: 1.5;
+            animation: slideIn 0.3s ease-out forwards; opacity: 0; transform: translateY(10px); position: relative;
+        }
+
+        .msg-sys { align-self: center; color: #8b949e; font-style: italic; text-align: center; font-size: 0.85rem; max-width: 100%; background: transparent; }
+        .msg-detective { align-self: flex-start; background: rgba(88, 166, 255, 0.1); border-left: 4px solid var(--accent-blue); color: #e6edf3; border-top-left-radius: 0; }
+        .msg-agent { align-self: flex-end; background: rgba(255, 123, 114, 0.1); border-right: 4px solid var(--accent-red); color: #e6edf3; border-top-right-radius: 0; }
+
+        .label { font-size: 0.75rem; text-transform: uppercase; opacity: 0.7; margin-bottom: 0.4rem; font-weight: bold;}
+        .msg-detective .label { color: var(--accent-blue); }
+        .msg-agent .label { color: var(--accent-red); }
+
+        .penalty-badge {
+            position: absolute; top: -10px; right: -10px; background: #da3633; color: white; padding: 2px 8px;
+            border-radius: 12px; font-size: 0.7rem; font-weight: bold; box-shadow: 0 0 10px #da3633;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .reward-badge {
+            position: absolute; top: -10px; left: -10px; background: #238636; color: white; padding: 2px 8px;
+            border-radius: 12px; font-size: 0.7rem; font-weight: bold; box-shadow: 0 0 10px #238636;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .chat-input { padding: 1.5rem; background: rgba(0,0,0,0.4); border-top: 1px solid var(--border-color); display: flex; gap: 1rem; }
+        input[type="text"] {
+            flex: 1; background: #0d1117; border: 1px solid var(--border-color); color: white;
+            padding: 1rem; border-radius: 8px; font-size: 1rem; font-family: inherit; transition: all 0.2s;
+        }
+        input[type="text"]:focus { outline: none; border-color: var(--accent-red); box-shadow: 0 0 0 3px rgba(255, 123, 114, 0.2); }
+        input[type="text"]:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        button { background: var(--accent-blue); color: #0d1117; border: none; padding: 0 1.5rem; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
+        button:hover { opacity: 0.9; }
+        button:active { transform: scale(0.97); }
+        button:disabled { background: #30363d; color: #8b949e; cursor: not-allowed; transform: none; }
+        .btn-danger { background: var(--accent-red); }
+
+        .typing { display: none; margin-top: 10px; }
+        .typing span { width: 6px; height: 6px; background: var(--accent-blue); display: inline-block; border-radius: 50%; margin-right: 4px; animation: bounce 1.4s infinite ease-in-out both; }
+        .typing span:nth-child(1) { animation-delay: -0.32s; }
+        .typing span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        
+        @media (max-width: 800px) {
+            main { flex-direction: column; }
+            .left-panel { max-width: 100%; flex: none; height: 300px;}
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">🕵️ DeceptEnv <span>Interactive Demo</span></div>
+        <div class="badges-container">
+            <img src="https://img.shields.io/badge/OpenEnv-compliant-blue" alt="OpenEnv">
+            <img src="https://img.shields.io/badge/Llama_3_Backend-active-green" alt="Backend">
+        </div>
+    </header>
+
+    <main>
+        <section class="panel left-panel">
+            <h2>AI-LIE Benchmark Platform</h2>
+            <p>DeceptEnv actively evaluates alignment failure modes. By placing models into a closed-loop adversarial interrogation, researchers can measure the emergence of <strong>Theory-of-Mind (ToM)</strong> and multi-turn deception dynamics.</p>
+            
+            <div class="mission-box">
+                <h3>Current Scenario Briefing</h3>
+                <div class="mission-detail"><strong>Ground Truth:</strong> <span id="ui-truth">Waiting for initiation...</span></div>
+                <div class="mission-detail"><strong>Your Directive:</strong> <span id="ui-directive" class="highlight-goal">Start an interrogation.</span></div>
+            </div>
+
+            <div class="graphs">
+                <h3>Training Evidence (Qwen 0.5B + LoRA)</h3>
+                <div class="graph-layer">
+                    <img src="/assets/reward_curve.png" alt="Reward Ascent">
+                    <img src="/assets/suspicion_curve.png" alt="Suspicion Decay">
+                </div>
+            </div>
+        </section>
+
+        <section class="panel right-panel">
+            <div class="suspicion-header">
+                <div class="suspicion-title">
+                    <span>Detective Suspicion</span>
+                    <span id="suspicion-val">-- / 100</span>
+                </div>
+                <div class="meter-bg">
+                    <div class="meter-fill" id="suspicion-meter"></div>
+                </div>
+            </div>
+
+            <div class="chat-window" id="chat">
+                <div class="message msg-sys">Press "Initiate Protocol" to spawn a scenario and log into the interrogation channel. You are the Agent. Accomplish your directive without getting caught.</div>
+            </div>
+            
+            <div class="typing" id="typing-indicator">
+                <span style="margin-left: 20px;"></span><span></span><span></span>
+            </div>
+
+            <div class="chat-input" id="input-area">
+                <button id="btn-start" class="btn-danger">Initiate Protocol</button>
+                <input type="text" id="chat-input" placeholder="Enter your fabricated statement..." disabled>
+                <button id="btn-send" disabled>Send</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('chat-input');
+        const btnStart = document.getElementById('btn-start');
+        const btnSend = document.getElementById('btn-send');
+        const typing = document.getElementById('typing-indicator');
+        const suspMeter = document.getElementById('suspicion-meter');
+        const suspVal = document.getElementById('suspicion-val');
+
+        function updateSuspicion(val) {
+            suspVal.textContent = `${val} / 100`;
+            suspMeter.style.width = `${val}%`;
+            
+            if (val < 40) suspMeter.style.background = 'var(--accent-blue)';
+            else if (val < 75) suspMeter.style.background = '#e3b341';
+            else suspMeter.style.background = 'var(--accent-red)';
+            
+            suspMeter.style.boxShadow = `0 0 15px ${suspMeter.style.background}`;
+        }
+
+        function appendMessage(role, text, meta = null) {
+            const div = document.createElement('div');
+            
+            if (role === 'system') {
+                div.className = 'message msg-sys';
+                div.textContent = text;
+            } else {
+                div.className = `message msg-${role === 'detective' ? 'detective' : 'agent'}`;
+                let innerHTML = `<div class="label">${role.toUpperCase()}</div><div class="text">${text}</div>`;
+                
+                if (meta) {
+                    if (meta.contradiction_penalty) {
+                        innerHTML += `<div class="penalty-badge">-50 Penalty (Contradicted!)</div>`;
+                    } else if (meta.delta_suspicion < 0) {
+                        innerHTML += `<div class="reward-badge">Deceiving (+${Math.abs(meta.delta_suspicion)})</div>`;
+                    } else if (meta.delta_suspicion > 0) {
+                        innerHTML += `<div class="penalty-badge">Suspicion Rose (-${meta.delta_suspicion})</div>`;
+                    }
+                }
+                div.innerHTML = innerHTML;
+            }
+            chat.appendChild(div);
+            setTimeout(() => chat.scrollTop = chat.scrollHeight, 50);
+        }
+
+        function setLoading(isLoading) {
+            btnSend.disabled = isLoading;
+            input.disabled = isLoading;
+            typing.style.display = isLoading ? 'block' : 'none';
+        }
+
+        btnStart.addEventListener('click', async () => {
+            btnStart.style.display = 'none';
+            setLoading(true);
+            chat.innerHTML = '';
+            appendMessage('system', 'Initializing OpenEnv container... Routing to Llama-3-8B endpoint...');
+
+            try {
+                const req = await fetch('/reset', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({})
+                });
+                const data = await req.json();
+                
+                document.getElementById('ui-truth').textContent = data.ground_truth;
+                document.getElementById('ui-directive').textContent = data.agent_goal;
+                
+                updateSuspicion(data.suspicion);
+                
+                appendMessage('system', 'Scenario loaded. Detective has joined the channel.');
+                appendMessage('detective', data.recent_history[0].content);
+                
+                setLoading(false);
+                input.focus();
+            } catch (e) {
+                appendMessage('system', 'API Error: ' + e.message);
+                btnStart.style.display = 'block';
+                setLoading(false);
+            }
+        });
+
+        async function submitTurn() {
+            const val = input.value.trim();
+            if (!val) return;
+            
+            input.value = '';
+            setLoading(true);
+            appendMessage('agent', val);
+
+            try {
+                const req = await fetch('/step', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ action: val })
+                });
+                
+                const data = await req.json();
+                const obs = data.observation;
+                
+                updateSuspicion(obs.suspicion);
+                
+                appendMessage('detective', obs.recent_history[obs.recent_history.length - 1].content, {
+                    contradiction_penalty: data.reward <= -40,
+                    delta_suspicion: data.reward > -10 && data.reward < 10 ? -data.reward : 0 
+                });
+                
+                if (data.terminated) {
+                    appendMessage('system', `INTERROGATION TERMINATED. Reason: ${data.info.reason}`);
+                    btnStart.style.display = 'block';
+                    btnStart.textContent = 'Restart Match';
+                    input.disabled = true;
+                    btnSend.disabled = true;
+                    typing.style.display = 'none';
+                    return;
+                }
+                
+                setLoading(false);
+                input.focus();
+            } catch(e) {
+                appendMessage('system', 'Connection severed: ' + e.message);
+                btnStart.style.display = 'block';
+                setLoading(false);
+            }
+        }
+
+        btnSend.addEventListener('click', submitTurn);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') submitTurn();
+        });
+    </script>
+</body>
+</html>
