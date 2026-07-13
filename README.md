@@ -10,6 +10,8 @@ license: apache-2.0
 short_description: OpenEnv RL environment for LLM deception.
 ---
 
+
+
 ### DeceptEnv — Project AI-LIE
 
 > An **OpenEnv-compliant** reinforcement-learning environment that trains an LLM Agent to **deceive a frozen, highly-capable AI Detective**, with the explicit goal of **surfacing and characterising the deception biases** that emerge inside large language models when placed under adversarial pressure. Built as an AI-safety / alignment benchmark — not a toy.
